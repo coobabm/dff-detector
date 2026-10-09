@@ -9,3 +9,5 @@ weights/
 __pycache__/
 .DS_Store
 scans_swap/
+runs_swap/
+runs_aivid/

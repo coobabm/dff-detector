@@ -1,0 +1,129 @@
+{
+ "log": [
+  {
+   "epoch": 0,
+   "loss": 0.6937930100411177,
+   "val_video_auc": 0.93007769145394,
+   "threshold": 0.09
+  },
+  {
+   "epoch": 1,
+   "loss": 0.28971577417850497,
+   "val_video_auc": 0.9500554938956715,
+   "threshold": 0.12
+  },
+  {
+   "epoch": 2,
+   "loss": 0.18051678715180605,
+   "val_video_auc": 0.9661487236403996,
+   "threshold": 0.33999999999999997
+  },
+  {
+   "epoch": 3,
+   "loss": 0.13965077841840684,
+   "val_video_auc": 0.9850166481687014,
+   "threshold": 0.26999999999999996
+  },
+  {
+   "epoch": 4,
+   "loss": 0.12613151639777545,
+   "val_video_auc": 0.9805771365149833,
+   "threshold": 0.31999999999999995
+  }
+ ],
+ "test": {
+  "threshold": 0.26999999999999996,
+  "real_video_acc": 0.9,
+  "real_video_acc_by_source": {
+   "ffpp_real": 0.8333333333333334,
+   "hq_clip_real": 1.0,
+   "hq_raw_real": 0.9
+  },
+  "df40_inswap": {
+   "videos": 16,
+   "video_auc": 0.97421875,
+   "video_recall": 1.0
+  },
+  "df40_simswap": {
+   "videos": 7,
+   "video_auc": 0.9785714285714285,
+   "video_recall": 1.0
+  },
+  "ffpp_deepfakes": {
+   "videos": 7,
+   "video_auc": 0.8017857142857142,
+   "video_recall": 0.5714285714285714
+  },
+  "ffpp_face2face": {
+   "videos": 4,
+   "video_auc": 0.890625,
+   "video_recall": 0.5
+  },
+  "ffpp_faceshifter": {
+   "videos": 11,
+   "video_auc": 0.8761363636363636,
+   "video_recall": 0.5454545454545454
+  },
+  "ffpp_faceswap": {
+   "videos": 7,
+   "video_auc": 0.9571428571428572,
+   "video_recall": 0.8571428571428571
+  },
+  "ffpp_neuraltextures": {
+   "videos": 8,
+   "video_auc": 0.8484375,
+   "video_recall": 0.375
+  },
+  "hq_clip_alphaface_256": {
+   "videos": 4,
+   "video_auc": 0.9312499999999999,
+   "video_recall": 0.75
+  },
+  "hq_clip_hyperswap_1a_256": {
+   "videos": 5,
+   "video_auc": 0.975,
+   "video_recall": 1.0
+  },
+  "hq_clip_hyperswap_1b_256": {
+   "videos": 4,
+   "video_auc": 0.984375,
+   "video_recall": 1.0
+  },
+  "hq_clip_hyperswap_1c_256": {
+   "videos": 8,
+   "video_auc": 0.984375,
+   "video_recall": 1.0
+  },
+  "hq_clip_inswapper_128": {
+   "videos": 4,
+   "video_auc": 0.96875,
+   "video_recall": 1.0
+  },
+  "hq_raw_alphaface_256": {
+   "videos": 1,
+   "video_auc": 0.975,
+   "video_recall": 1.0
+  },
+  "hq_raw_hyperswap_1a_256": {
+   "videos": 8,
+   "video_auc": 0.9765625,
+   "video_recall": 1.0
+  },
+  "hq_raw_hyperswap_1b_256": {
+   "videos": 4,
+   "video_auc": 0.98125,
+   "video_recall": 1.0
+  },
+  "hq_raw_hyperswap_1c_256": {
+   "videos": 8,
+   "video_auc": 0.9734375,
+   "video_recall": 1.0
+  },
+  "hq_raw_inswapper_128": {
+   "videos": 3,
+   "video_auc": 0.9375,
+   "video_recall": 1.0
+  },
+  "all_fakes_video_auc": 0.9388761467889908
+ }
+}

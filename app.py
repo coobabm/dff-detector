@@ -3,9 +3,9 @@
   uv run app.py   ->  http://127.0.0.1:7860
 
 "Detect" tab: one upload box for images and videos, routed to specialist models:
-  image -> all_openai (AI images) + Grad-CAM
-  video -> all_video (AI-generated video, loose face crops)
-           + face-swap detector runs_swap/b4 (tight 380 px face crops), if trained
+  image -> all_image (AI images incl. StyleGAN; falls back to all_openai) + Grad-CAM
+  video -> AI-video detector runs_aivid/b4 + face-swap detector runs_swap/b4
+           (both EfficientNet-B4 on tight 380 px face crops; all_video as fallback)
   Fake if any detector is above its threshold; the breakdown says which kind.
 "Pick a model" tab: run any trained image model by hand.
 """
@@ -29,8 +29,17 @@ register_heif_opener()  # iPhone HEIC/HEIF uploads
 ROOT = Path(__file__).parent
 RUNS = ROOT / "runs"
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
-IMAGE_MODEL, VIDEO_MODEL = "all_openai", "all_video"
+VIDEO_MODEL = "all_video"  # fallback AI-video detector (loose crops) if the B4 one is not trained
 SWAP_CKPT = ROOT / "runs_swap" / "b4" / "model.pt"
+AIVID_CKPT = ROOT / "runs_aivid" / "b4" / "model.pt"
+
+
+def image_model():
+    """Best image model available: all_image (AI images + StyleGAN), else all_openai."""
+    for name in ("all_image", "all_openai"):
+        if (RUNS / name / "model.pt").exists():
+            return name
+    return (run_names() or [None])[0]
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 tf = T.Compose([T.Resize(224), T.CenterCrop(224), T.ToTensor(), T.Normalize(MEAN, STD)])
 
@@ -120,15 +129,15 @@ def load(name):
     return m.to(DEVICE).eval()
 
 
-@lru_cache(maxsize=1)
-def load_swap():
-    """Face-swap detector (EfficientNet-B4) + its validation threshold, or None if not trained yet."""
-    if not SWAP_CKPT.exists():
+@lru_cache(maxsize=2)
+def load_b4(ckpt):
+    """Tight-crop EfficientNet-B4 detector + its validation threshold, or None if not trained yet."""
+    if not Path(ckpt).exists():
         return None
-    from train_swap import build as build_swap
+    from train_swap import build as build_b4
 
-    ck = torch.load(SWAP_CKPT, map_location="cpu")
-    m = build_swap(pretrained=False)
+    ck = torch.load(ckpt, map_location="cpu")
+    m = build_b4(pretrained=False)
     m.load_state_dict(ck["model"])
     return m.to(DEVICE).eval(), ck["threshold"]
 
@@ -173,8 +182,34 @@ def analyze_video(path, lang="zh"):
     frames = video_frames(path, 16)
     rows, gallery = [], []
 
-    # 1) AI-generated video: loose crops, same framing as the image models.
-    if VIDEO_MODEL in run_names():
+    tight = None  # tight 380 px face crops, shared by both B4 detectors
+
+    def b4_scores(det, cap):
+        nonlocal tight
+        from train_swap import eval_tf as b4_tf
+
+        if tight is None:
+            tight = []
+            for _, f in frames:
+                c = tight_crop(f)
+                if c is not None:
+                    tight.append(Image.fromarray(cv2.cvtColor(c, cv2.COLOR_BGR2RGB)))
+        m, thr = det
+        ps = []
+        for im in tight:
+            p = torch.sigmoid(m(b4_tf(im).unsqueeze(0).to(DEVICE))).item()
+            ps.append(p)
+            if len(ps) % 3 == 1:
+                gallery.append((im, f"{cap} {p:.2f}"))
+        return ps, thr
+
+    # 1) AI-generated video: B4 on tight crops if trained, else the loose-crop image-style model.
+    aivid = load_b4(str(AIVID_CKPT))
+    if aivid:
+        ps, thr = b4_scores(aivid, t["cap_aivid"])
+        if ps:
+            rows.append((t["det_aivid"], float(np.median(ps)), thr, len(ps)))
+    elif VIDEO_MODEL in run_names():
         m, ps = load(VIDEO_MODEL), []
         for _, f in frames:
             faces = faces_in(f)
@@ -187,22 +222,10 @@ def analyze_video(path, lang="zh"):
         if ps:
             rows.append((t["det_aivid"], float(np.median(ps)), 0.5, len(ps)))
 
-    # 2) Face swap: tight crops, EfficientNet-B4.
-    swap = load_swap()
+    # 2) Face swap: B4 on tight crops.
+    swap = load_b4(str(SWAP_CKPT))
     if swap:
-        from train_swap import eval_tf as swap_tf
-
-        m, thr = swap
-        ps = []
-        for _, f in frames:
-            c = tight_crop(f)
-            if c is None:
-                continue
-            im = Image.fromarray(cv2.cvtColor(c, cv2.COLOR_BGR2RGB))
-            p = torch.sigmoid(m(swap_tf(im).unsqueeze(0).to(DEVICE))).item()
-            ps.append(p)
-            if len(ps) % 2:
-                gallery.append((im, f"{t['cap_swap']} {p:.2f}"))
+        ps, thr = b4_scores(swap, t["cap_swap"])
         if ps:
             rows.append((t["det_swap"], float(np.median(ps)), thr, len(ps)))
 
@@ -230,8 +253,7 @@ def analyze_any(file, lang_name="中文"):
         img = Image.open(path)
     except Exception:
         return None, None, TXT[lang]["bad_file"], []
-    run = IMAGE_MODEL if IMAGE_MODEL in run_names() else (run_names() or [None])[0]
-    lbl, cam, md = analyze(img, run, lang)
+    lbl, cam, md = analyze(img, image_model(), lang)
     return lbl, cam, md, []
 
 
@@ -308,7 +330,7 @@ with gr.Blocks(title="AI Face Detector") as demo:
 
     def refresh():
         names = run_names()
-        value = IMAGE_MODEL if IMAGE_MODEL in names else (names[0] if names else None)
+        value = image_model()
         return gr.update(choices=names, value=value), results_table("zh")
 
     demo.load(refresh, None, [run, table])

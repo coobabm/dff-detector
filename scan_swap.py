@@ -1,6 +1,7 @@
 """Scan videos with the face-swap detector (tight 380 px face crops).
 
-  uv run scan_swap.py video1.mp4 video2.mp4 ...
+  uv run scan_swap.py video1.mp4 video2.mp4 ...                  # face-swap detector
+  uv run scan_swap.py --model runs_aivid/b4 video1.mp4 ...       # AI-video detector
 
 Per video: 32 evenly spaced frames, largest face, median fake score vs. the
 threshold chosen on validation. Also writes a contact sheet to scans_swap/<video>.jpg.
@@ -20,14 +21,18 @@ ROOT = Path(__file__).parent
 
 
 def main():
-    ck = torch.load(OUT / "model.pt", map_location="cpu")
+    args = sys.argv[1:]
+    model_dir = OUT
+    if args and args[0] == "--model":
+        model_dir, args = ROOT / args[1], args[2:]
+    ck = torch.load(model_dir / "model.pt", map_location="cpu")
     model = build(pretrained=False)
     model.load_state_dict(ck["model"])
     model.to(DEVICE).eval()
     thr = ck["threshold"]
     (ROOT / "scans_swap").mkdir(exist_ok=True)
     print(f"threshold {thr:.2f}")
-    for v in sys.argv[1:]:
+    for v in args:
         crops, ps = [], []
         for _, frame in video_frames(v, 32):
             c = tight_crop(frame)

@@ -1,0 +1,68 @@
+{
+ "before": {
+  "k140_fake": {
+   "recall": 0.0,
+   "n": 204
+  },
+  "k140_real": {
+   "acc": 1.0,
+   "n": 215
+  },
+  "sg2face": {
+   "recall": 0.005813953488372093,
+   "n": 172
+  },
+  "sg3": {
+   "recall": 0.0,
+   "n": 188
+  },
+  "tpdne": {
+   "recall": 0.0,
+   "n": 288
+  },
+  "openai_recall": 0.985,
+  "photo_real_acc": 0.9783333333333334,
+  "photo_real_acc_by_source": {
+   "easyportrait": 0.994,
+   "ffhq": 1.0,
+   "flickr30k": 0.992,
+   "pexels": 0.986,
+   "ppr10k": 0.998,
+   "wiki": 0.9
+  },
+  "dff_fake_recall": 0.794
+ },
+ "after": {
+  "k140_fake": {
+   "recall": 0.8480392156862745,
+   "n": 204
+  },
+  "k140_real": {
+   "acc": 0.9488372093023256,
+   "n": 215
+  },
+  "sg2face": {
+   "recall": 0.9825581395348837,
+   "n": 172
+  },
+  "sg3": {
+   "recall": 0.9893617021276596,
+   "n": 188
+  },
+  "tpdne": {
+   "recall": 0.9340277777777778,
+   "n": 288
+  },
+  "openai_recall": 0.99,
+  "photo_real_acc": 0.9513333333333334,
+  "photo_real_acc_by_source": {
+   "easyportrait": 0.996,
+   "ffhq": 0.898,
+   "flickr30k": 0.986,
+   "pexels": 0.986,
+   "ppr10k": 1.0,
+   "wiki": 0.842
+  },
+  "dff_fake_recall": 0.8333333333333334
+ }
+}

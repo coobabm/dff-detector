@@ -7,8 +7,12 @@ evenly spaced frames, finds the largest face (YuNet), crops 1.3x the face box an
 resizes to SIZE x SIZE. Unlike video_scan.py (loose 2.2x crop, face ~100 px), the
 face fills most of the image, so fine swap traces survive.
 
-Output: data/img380/<source>/<video>_<k>.jpg, manifest data/swap_frames.csv.
+Output: data/img380/<source>/<video>_<k>.jpg, manifest data/<--out> (default swap_frames.csv).
+
+  uv run extract_tight.py                                   # face-swap detector data
+  uv run extract_tight.py --lists aivid.csv rapidata.csv hq_clip.csv hq_raw.csv public.csv --out aivid_frames.csv
 """
+import argparse
 import csv
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -84,8 +88,14 @@ def process(row):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lists", nargs="+", default=None,
+                    help="video manifests under data/videos (default: all *.csv there)")
+    ap.add_argument("--out", default="swap_frames.csv", help="frame manifest written under data/")
+    args = ap.parse_args()
+    lists = [DATA / "videos" / l for l in args.lists] if args.lists else sorted((DATA / "videos").glob("*.csv"))
     videos = []
-    for f in sorted((DATA / "videos").glob("*.csv")):
+    for f in lists:
         videos += list(csv.DictReader(open(f)))
     print("videos", len(videos), flush=True)
     rows = []
@@ -94,7 +104,7 @@ def main():
             rows += r
             if i % 100 == 0:
                 print(f"{i}/{len(videos)} videos, {len(rows)} frames", flush=True)
-    with open(DATA / "swap_frames.csv", "w", newline="") as f:
+    with open(DATA / args.out, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["path", "source", "label", "group", "split", "video"])
         w.writerows(rows)

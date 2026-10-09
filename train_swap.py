@@ -1,6 +1,7 @@
 """Video face-swap detector: EfficientNet-B4 on tight 380 px face crops.
 
-  uv run train_swap.py [--epochs 5]
+  uv run train_swap.py [--epochs 5]                                   # face-swap detector
+  uv run train_swap.py --frames aivid_frames.csv --task aivid --out runs_aivid/b4   # AI-video detector
 
 Data: data/swap_frames.csv from extract_tight.py. 10% of training groups are held
 out as validation (best epoch + decision threshold chosen on video-level val scores).
@@ -28,7 +29,12 @@ from train import MEAN, STD, degrade
 
 ROOT = Path(__file__).parent
 DATA = ROOT / "data"
-OUT = ROOT / "runs_swap" / "b4"
+OUT = ROOT / "runs_swap" / "b4"  # default output (face-swap detector)
+# Which fake sources each task trains on; reals are every *_real source.
+TASK_FAKES = {
+    "swap": r"^(hq_clip|hq_raw)_(?!real)|^ffpp_(?!real)|^df40_(inswap|simswap|uniface)",
+    "aivid": r"^rp_|^(veo3|sora2|kling|wan2|sora1|keling)$|^thb_|^df40_heygen",
+}
 SIZE = 380
 DEVICE = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -97,12 +103,18 @@ def main():
     ap.add_argument("--bs", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--steps", type=int, default=1500, help="optimizer steps per epoch")
+    ap.add_argument("--frames", default="swap_frames.csv")
+    ap.add_argument("--task", choices=list(TASK_FAKES), default="swap")
+    ap.add_argument("--out", default=str(OUT.relative_to(ROOT)))
     args = ap.parse_args()
+    out = ROOT / args.out
     os.environ["DFF_CINEMATIC"] = "1"
     torch.manual_seed(0)
     random.seed(0)
 
-    df = pd.read_csv(DATA / "swap_frames.csv")
+    df = pd.read_csv(DATA / args.frames)
+    is_real = df.source.str.endswith("_real") & (df.label == 0)
+    df = df[is_real | df.source.str.contains(TASK_FAKES[args.task], regex=True)]
     tr, te = df[df.split == "train"], df[df.split == "test"]
     groups = sorted(tr.group.unique())
     random.Random(0).shuffle(groups)
@@ -122,7 +134,7 @@ def main():
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, args.lr, total_steps=args.epochs * args.steps, pct_start=0.1)
     loss_fn = nn.BCEWithLogitsLoss()
-    OUT.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     best, log = -1.0, []
     for ep in range(args.epochs):
         model.train()
@@ -145,14 +157,15 @@ def main():
         log.append({"epoch": ep, "loss": tot / args.steps, "val_video_auc": auc, "threshold": thr})
         if auc > best:
             best = auc
-            torch.save({"model": model.state_dict(), "threshold": thr}, OUT / "model.pt")
+            torch.save({"model": model.state_dict(), "threshold": thr}, out / "model.pt")
 
-    ck = torch.load(OUT / "model.pt", map_location="cpu")
+    ck = torch.load(out / "model.pt", map_location="cpu")
     model.load_state_dict(ck["model"])
     res = report(te, predict(model, te), ck["threshold"])
     print("TEST", json.dumps(res, indent=1), flush=True)
     (ROOT / "results").mkdir(exist_ok=True)
-    json.dump({"log": log, "test": res}, open(ROOT / "results" / "swap_detector.json", "w"), indent=1)
+    name = "swap_detector.json" if args.task == "swap" else f"{args.task}_detector.json"
+    json.dump({"log": log, "test": res}, open(ROOT / "results" / name, "w"), indent=1)
 
 
 if __name__ == "__main__":
