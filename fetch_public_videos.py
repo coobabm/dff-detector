@@ -39,7 +39,10 @@ def main():
             got = 0
             for name in names[:n]:
                 stem = Path(name).stem
-                ident = int(stem.split("_")[0])
+                head = stem.split("_")[0]
+                if not head.isdigit():  # e.g. DF40 celeb-df style "id25_..." names: no FF++ id, skip
+                    continue
+                ident = int(head)
                 dst = DATA / "videos" / "public" / source / f"{stem}.mp4"
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 if not dst.exists():
