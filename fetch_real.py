@@ -1,6 +1,6 @@
 """Download modern real-people photos to pair with OpenAI fakes.
 
-  uv run fetch_real.py pexels ppr10k flickr30k easyportrait
+  uv run fetch_real.py ffhq pexels ppr10k flickr30k easyportrait
 
 Each source -> data/img256/<source>/*.jpg (center square crop, 256x256, JPEG q95,
 same preprocessing as the OpenAI images).
@@ -104,6 +104,27 @@ def from_zip(name, repo, member, filt=lambda n: True):
     print(name, "ok", ok, "/", min(N, len(names)), flush=True)
     zp.unlink()
     done.unlink()
+
+
+def ffhq():
+    """First shard of bitmind/ffhq-256 (4,375 aligned Flickr faces, already 256x256)."""
+    import pyarrow.parquet as pq
+
+    pq_path = SRC / "ffhq_shard0.parquet"
+    if not pq_path.with_suffix(".done").exists():
+        subprocess.run(["curl", "-sL", "--retry", "10", "-C", "-", "-o", str(pq_path),
+                        f"{HF}/bitmind/ffhq-256/resolve/main/data/train-00000-of-00016.parquet"], check=True)
+        pq_path.with_suffix(".done").touch()
+    out = DATA / "img256" / "ffhq"
+    out.mkdir(parents=True, exist_ok=True)
+    rows = pq.read_table(pq_path).column("image").to_pylist()
+    for i, r in enumerate(rows):
+        dst = out / f"{i:05d}.jpg"
+        if not dst.exists():
+            Image.open(io.BytesIO(r["bytes"])).convert("RGB").resize((256, 256), Image.BICUBIC).save(dst, quality=95)
+    print("ffhq ok", len(rows), flush=True)
+    pq_path.unlink()
+    pq_path.with_suffix(".done").unlink()
 
 
 def flickr30k():

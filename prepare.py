@@ -1,9 +1,10 @@
-"""Unzip DeepFakeFace, resize every image to 256x256, write split manifest.
+"""Download + unzip DeepFakeFace (~5 GB), resize every image to 256x256, write split manifest.
 
 Split is by IMDB-WIKI subfolder (person id mod 100), so one person never
 appears in two splits. Folders 00-79 train, 80-89 val, 90-99 test.
 """
 import csv
+import subprocess
 import sys
 import zipfile
 from concurrent.futures import ProcessPoolExecutor
@@ -50,7 +51,21 @@ def process(args):
     return rows
 
 
+def download():
+    RAW.mkdir(parents=True, exist_ok=True)
+    for src in SOURCES:
+        zp = RAW / f"{src}.zip"
+        done = zp.with_suffix(".done")
+        if done.exists():
+            continue
+        print("downloading", zp.name, flush=True)
+        subprocess.run(["curl", "-L", "--retry", "10", "--retry-all-errors", "-C", "-", "-o", str(zp),
+                        f"https://huggingface.co/datasets/OpenRL/DeepFakeFace/resolve/main/{src}.zip"], check=True)
+        done.touch()
+
+
 def main():
+    download()
     jobs = []
     for src in SOURCES:
         zp = RAW / f"{src}.zip"
