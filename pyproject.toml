@@ -8,6 +8,7 @@ dependencies = [
     "opencv-python>=5.0.0.93",
     "pandas>=3.0.6",
     "pillow>=12.3.0",
+    "pillow-heif>=1.8.0",
     "pyarrow>=25.0.1",
     "requests>=2.34.2",
     "scikit-learn>=1.9.1",

@@ -11,7 +11,10 @@ import matplotlib.cm as cm
 import numpy as np
 import torch
 import torch.nn.functional as F
-from PIL import Image
+from PIL import Image, ImageOps
+from pillow_heif import register_heif_opener
+
+register_heif_opener()  # iPhone HEIC/HEIF uploads
 from torchvision import transforms as T
 
 from train import FAKES, MEAN, STD, build_model
@@ -43,7 +46,7 @@ def analyze(img, run):
     if img is None or not run:
         return None, None, ""
     model = load(run)
-    im = square(img.convert("RGB"))
+    im = square(ImageOps.exif_transpose(img).convert("RGB"))
     x = tf(im).unsqueeze(0).to(DEVICE)
     feats = model.forward_features(x)
     feats.retain_grad()
