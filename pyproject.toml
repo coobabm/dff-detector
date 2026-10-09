@@ -10,6 +10,7 @@ dependencies = [
     "pillow>=12.3.0",
     "pillow-heif>=1.8.0",
     "pyarrow>=25.0.1",
+    "remotezip>=0.12.6",
     "requests>=2.34.2",
     "scikit-learn>=1.9.1",
     "timm>=1.0.30",

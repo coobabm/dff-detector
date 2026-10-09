@@ -1,0 +1,340 @@
+{
+ "before": {
+  "real_video_frame_acc": 0.7552986512524085,
+  "real_video_acc": 0.7562189054726368,
+  "real_video_acc_by_source": {
+   "celebv_clips": 0.8976377952755905,
+   "celebv_raw": 1.0,
+   "ffpp_real": 0.3333333333333333,
+   "ffusion_real": 1.0
+  },
+  "df40_heygen": {
+   "videos": 13,
+   "frame_auc": 0.4095153401511783,
+   "video_auc": 0.38270187523918864,
+   "video_recall": 0.07692307692307693
+  },
+  "df40_inswap": {
+   "videos": 19,
+   "frame_auc": 0.760369130919785,
+   "video_auc": 0.7703587326525267,
+   "video_recall": 0.7894736842105263
+  },
+  "df40_simswap": {
+   "videos": 27,
+   "frame_auc": 0.7758063940626561,
+   "video_auc": 0.7799889441680486,
+   "video_recall": 0.7037037037037037
+  },
+  "df40_uniface": {
+   "videos": 24,
+   "frame_auc": 0.8897786876471847,
+   "video_auc": 0.8973880597014925,
+   "video_recall": 0.9166666666666666
+  },
+  "ffpp_deepfakes": {
+   "videos": 12,
+   "frame_auc": 0.7729675123099978,
+   "video_auc": 0.798922056384743,
+   "video_recall": 0.6666666666666666
+  },
+  "ffpp_face2face": {
+   "videos": 9,
+   "frame_auc": 0.7562442018126025,
+   "video_auc": 0.7705914870093975,
+   "video_recall": 0.6666666666666666
+  },
+  "ffpp_faceshifter": {
+   "videos": 14,
+   "frame_auc": 0.7808629232039637,
+   "video_auc": 0.791044776119403,
+   "video_recall": 0.7142857142857143
+  },
+  "ffpp_faceswap": {
+   "videos": 12,
+   "frame_auc": 0.7957343181331621,
+   "video_auc": 0.806799336650083,
+   "video_recall": 0.5
+  },
+  "ffpp_neuraltextures": {
+   "videos": 12,
+   "frame_auc": 0.7716763005780347,
+   "video_auc": 0.7748756218905473,
+   "video_recall": 0.75
+  },
+  "ffusion_alphaface_256": {
+   "videos": 4,
+   "frame_auc": 0.35703676942838797,
+   "video_auc": 0.3370646766169154,
+   "video_recall": 0.0
+  },
+  "ffusion_hyperswap_1a_256": {
+   "videos": 3,
+   "frame_auc": 0.45033183472489835,
+   "video_auc": 0.40298507462686567,
+   "video_recall": 0.3333333333333333
+  },
+  "ffusion_hyperswap_1b_256": {
+   "videos": 2,
+   "frame_auc": 0.14314386640976234,
+   "video_auc": 0.09452736318407962,
+   "video_recall": 0.0
+  },
+  "ffusion_hyperswap_1c_256": {
+   "videos": 2,
+   "frame_auc": 0.1966235434443527,
+   "video_auc": 0.13681592039800994,
+   "video_recall": 0.0
+  },
+  "ffusion_inswapper_128": {
+   "videos": 5,
+   "frame_auc": 0.4763326910725755,
+   "video_auc": 0.46467661691542284,
+   "video_recall": 0.2
+  },
+  "keling": {
+   "videos": 17,
+   "frame_auc": 0.45285952005605185,
+   "video_auc": 0.4553702077846064,
+   "video_recall": 0.058823529411764705
+  },
+  "kling": {
+   "videos": 4,
+   "frame_auc": 0.6267394562192251,
+   "video_auc": 0.6032338308457712,
+   "video_recall": 0.25
+  },
+  "sora1": {
+   "videos": 1,
+   "frame_auc": 0.26118604153286235,
+   "video_auc": 0.25373134328358204,
+   "video_recall": 0.0
+  },
+  "sora2": {
+   "videos": 1,
+   "frame_auc": 0.030025690430314736,
+   "video_auc": 0.01990049751243783,
+   "video_recall": 0.0
+  },
+  "thb_aniportraitaudio": {
+   "videos": 20,
+   "frame_auc": 0.25885517019910087,
+   "video_auc": 0.208955223880597,
+   "video_recall": 0.0
+  },
+  "thb_aniportraitvideo": {
+   "videos": 20,
+   "frame_auc": 0.2837989723827874,
+   "video_auc": 0.2696517412935323,
+   "video_recall": 0.0
+  },
+  "thb_emoportrait": {
+   "videos": 20,
+   "frame_auc": 0.3988439306358381,
+   "video_auc": 0.3686567164179104,
+   "video_recall": 0.0
+  },
+  "thb_hallo": {
+   "videos": 20,
+   "frame_auc": 0.2591281310211946,
+   "video_auc": 0.21393034825870647,
+   "video_recall": 0.0
+  },
+  "thb_hallo2": {
+   "videos": 20,
+   "frame_auc": 0.47785404624277455,
+   "video_auc": 0.4554726368159204,
+   "video_recall": 0.25
+  },
+  "thb_liveportrait": {
+   "videos": 19,
+   "frame_auc": 0.4146409058516114,
+   "video_auc": 0.37732390678188005,
+   "video_recall": 0.05263157894736842
+  },
+  "veo3": {
+   "videos": 17,
+   "frame_auc": 0.5184114750588739,
+   "video_auc": 0.5762364647351478,
+   "video_recall": 0.17647058823529413
+  },
+  "wan2": {
+   "videos": 3,
+   "frame_auc": 0.6157996146435453,
+   "video_auc": 0.3996683250414593,
+   "video_recall": 0.0
+  },
+  "openai_recall": 0.985,
+  "photo_real_acc": 0.9783333333333334,
+  "dff_fake_recall": 0.794
+ },
+ "after": {
+  "real_video_frame_acc": 0.8131021194605009,
+  "real_video_acc": 0.835820895522388,
+  "real_video_acc_by_source": {
+   "celebv_clips": 0.9291338582677166,
+   "celebv_raw": 1.0,
+   "ffpp_real": 0.5740740740740741,
+   "ffusion_real": 0.875
+  },
+  "df40_heygen": {
+   "videos": 13,
+   "frame_auc": 0.8930203547255571,
+   "video_auc": 0.8916953693073096,
+   "video_recall": 0.7692307692307693
+  },
+  "df40_inswap": {
+   "videos": 19,
+   "frame_auc": 0.8801169590643275,
+   "video_auc": 0.888190625818277,
+   "video_recall": 0.7894736842105263
+  },
+  "df40_simswap": {
+   "videos": 27,
+   "frame_auc": 0.8617949998810629,
+   "video_auc": 0.8778330569375346,
+   "video_recall": 0.7037037037037037
+  },
+  "df40_uniface": {
+   "videos": 24,
+   "frame_auc": 0.8688115499892957,
+   "video_auc": 0.8793532338308458,
+   "video_recall": 0.75
+  },
+  "ffpp_deepfakes": {
+   "videos": 12,
+   "frame_auc": 0.8268170627274674,
+   "video_auc": 0.8387230514096187,
+   "video_recall": 0.5
+  },
+  "ffpp_face2face": {
+   "videos": 9,
+   "frame_auc": 0.8154927567258974,
+   "video_auc": 0.8247650635710337,
+   "video_recall": 0.6666666666666666
+  },
+  "ffpp_faceshifter": {
+   "videos": 14,
+   "frame_auc": 0.8407824112303881,
+   "video_auc": 0.8560767590618338,
+   "video_recall": 0.7142857142857143
+  },
+  "ffpp_faceswap": {
+   "videos": 12,
+   "frame_auc": 0.7318895846713765,
+   "video_auc": 0.7276119402985075,
+   "video_recall": 0.4166666666666667
+  },
+  "ffpp_neuraltextures": {
+   "videos": 12,
+   "frame_auc": 0.8272452365660459,
+   "video_auc": 0.8432835820895522,
+   "video_recall": 0.6666666666666666
+  },
+  "ffusion_alphaface_256": {
+   "videos": 4,
+   "frame_auc": 0.8818440912010276,
+   "video_auc": 0.8917910447761194,
+   "video_recall": 0.75
+  },
+  "ffusion_hyperswap_1a_256": {
+   "videos": 3,
+   "frame_auc": 0.9097356026546778,
+   "video_auc": 0.9203980099502488,
+   "video_recall": 1.0
+  },
+  "ffusion_hyperswap_1b_256": {
+   "videos": 2,
+   "frame_auc": 0.7756502890173411,
+   "video_auc": 0.8009950248756219,
+   "video_recall": 0.0
+  },
+  "ffusion_hyperswap_1c_256": {
+   "videos": 2,
+   "frame_auc": 0.8487934672905771,
+   "video_auc": 0.8805970149253731,
+   "video_recall": 1.0
+  },
+  "ffusion_inswapper_128": {
+   "videos": 5,
+   "frame_auc": 0.8747430956968528,
+   "video_auc": 0.8945273631840795,
+   "video_recall": 0.8
+  },
+  "keling": {
+   "videos": 17,
+   "frame_auc": 0.6733885093711685,
+   "video_auc": 0.7067603160667252,
+   "video_recall": 0.35294117647058826
+  },
+  "kling": {
+   "videos": 4,
+   "frame_auc": 0.8351530721472917,
+   "video_auc": 0.9004975124378108,
+   "video_recall": 0.75
+  },
+  "sora1": {
+   "videos": 1,
+   "frame_auc": 0.21922500535217296,
+   "video_auc": 0.19402985074626866,
+   "video_recall": 0.0
+  },
+  "sora2": {
+   "videos": 1,
+   "frame_auc": 0.9086384071933205,
+   "video_auc": 0.9303482587064676,
+   "video_recall": 1.0
+  },
+  "thb_aniportraitaudio": {
+   "videos": 20,
+   "frame_auc": 0.8138005780346821,
+   "video_auc": 0.8203980099502488,
+   "video_recall": 0.6
+  },
+  "thb_aniportraitvideo": {
+   "videos": 20,
+   "frame_auc": 0.7946411368015412,
+   "video_auc": 0.8077114427860697,
+   "video_recall": 0.6
+  },
+  "thb_emoportrait": {
+   "videos": 20,
+   "frame_auc": 0.9313904945407837,
+   "video_auc": 0.9432835820895522,
+   "video_recall": 0.95
+  },
+  "thb_hallo": {
+   "videos": 20,
+   "frame_auc": 0.8433445728965959,
+   "video_auc": 0.8534825870646766,
+   "video_recall": 0.7
+  },
+  "thb_hallo2": {
+   "videos": 20,
+   "frame_auc": 0.8198137443802184,
+   "video_auc": 0.831094527363184,
+   "video_recall": 0.65
+  },
+  "thb_liveportrait": {
+   "videos": 19,
+   "frame_auc": 0.734227219538804,
+   "video_auc": 0.7234878240377063,
+   "video_recall": 0.47368421052631576
+  },
+  "veo3": {
+   "videos": 17,
+   "frame_auc": 0.9502176550346106,
+   "video_auc": 0.9382499268364062,
+   "video_recall": 0.8823529411764706
+  },
+  "wan2": {
+   "videos": 3,
+   "frame_auc": 0.9360308285163776,
+   "video_auc": 0.8822553897180763,
+   "video_recall": 0.6666666666666666
+  },
+  "openai_recall": 0.98,
+  "photo_real_acc": 0.9573333333333334,
+  "dff_fake_recall": 0.7946666666666666
+ }
+}

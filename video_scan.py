@@ -39,11 +39,14 @@ def load_models():
 
 def faces_in(frame_bgr):
     h, w = frame_bgr.shape[:2]
-    DETECTOR.setInputSize((w, h))
-    _, dets = DETECTOR.detect(frame_bgr)
+    # Detect on a downscaled copy (fast), crop from the full-resolution frame.
+    scale = min(1.0, 960 / max(h, w))
+    small = cv2.resize(frame_bgr, (int(w * scale), int(h * scale))) if scale < 1 else frame_bgr
+    DETECTOR.setInputSize((small.shape[1], small.shape[0]))
+    _, dets = DETECTOR.detect(small)
     out = []
     for det in dets if dets is not None else []:
-        x, y, bw, bh = (int(v) for v in det[:4])
+        x, y, bw, bh = (int(v / scale) for v in det[:4])
         if min(bw, bh) < max(24, w // 40):
             continue
         # DFF images are loose face crops: face ~45% of width, some shoulders below.

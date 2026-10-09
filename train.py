@@ -9,10 +9,12 @@ After training, the model is tested on every fake source (cross-generator test).
 import argparse
 import io
 import json
+import os
 import random
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import timm
 import torch
@@ -28,8 +30,25 @@ FAKES = ["text2img", "inpainting", "insight"]
 MEAN, STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 
 
+def cinematic(im: Image.Image) -> Image.Image:
+    """Film look: darker gamma, lower saturation, teal/orange grade, grain."""
+    a = np.asarray(im, dtype=np.float32) / 255.0
+    a = (a ** random.uniform(1.3, 2.4)) * random.uniform(0.35, 0.8)
+    gray = a.mean(axis=2, keepdims=True)
+    a = gray + (a - gray) * random.uniform(0.5, 1.0)
+    lum = gray
+    teal, orange = np.array([0.0, 0.08, 0.12]), np.array([0.12, 0.06, 0.0])
+    s = random.uniform(0.0, 1.0)
+    a = a + s * ((1 - lum) * teal + lum * orange)
+    a = a + np.random.normal(0, random.uniform(0.0, 0.03), a.shape)
+    return Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8))
+
+
 def degrade(im: Image.Image) -> Image.Image:
     """Random real-world degradations, applied to both classes equally."""
+    # Opt-in (env DFF_CINEMATIC=1) so earlier DFF/OpenAI experiments stay reproducible.
+    if os.environ.get("DFF_CINEMATIC") == "1" and random.random() < 0.3:
+        im = cinematic(im)
     if random.random() < 0.2:
         s = random.randint(96, 200)
         im = im.resize((s, s), Image.BILINEAR).resize(im.size, Image.BILINEAR)
