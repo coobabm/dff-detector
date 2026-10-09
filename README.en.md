@@ -1,4 +1,4 @@
-[中文](README.md) | **English**
+[中文](README.md) | **English** | [한국어](README.ko.md)
 
 # Detecting AI-generated faces: DeepFakeFace replication + OpenAI image detection
 

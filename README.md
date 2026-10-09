@@ -1,4 +1,4 @@
-**中文** | [English](README.en.md)
+**中文** | [English](README.en.md) | [한국어](README.ko.md)
 
 # AI 生成人脸鉴别：DeepFakeFace 复现 + OpenAI 生图检测
 
