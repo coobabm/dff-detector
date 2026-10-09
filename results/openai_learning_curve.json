@@ -1,0 +1,122 @@
+[
+ {
+  "n_train": 0,
+  "openai_auc": 0.4116066666666667,
+  "openai_recall": 0.03,
+  "openai_recall_by_model": {
+   "gpt-image-1.5": 0.015625,
+   "gpt-image-2": 0.0379746835443038,
+   "gpt-image-2.5": 0.03508771929824561
+  },
+  "real_acc": 0.9516666666666667,
+  "real_acc_by_source": {
+   "easyportrait": 0.95,
+   "ffhq": 0.942,
+   "flickr30k": 0.974,
+   "pexels": 0.914,
+   "ppr10k": 0.964,
+   "wiki": 0.966
+  },
+  "dff_fake_recall": 0.7666666666666667
+ },
+ {
+  "n_train": 50,
+  "openai_auc": 0.9760283333333333,
+  "openai_recall": 0.835,
+  "openai_recall_by_model": {
+   "gpt-image-1.5": 0.828125,
+   "gpt-image-2": 0.810126582278481,
+   "gpt-image-2.5": 0.8771929824561403
+  },
+  "real_acc": 0.9806666666666667,
+  "real_acc_by_source": {
+   "easyportrait": 0.994,
+   "ffhq": 0.998,
+   "flickr30k": 0.998,
+   "pexels": 0.988,
+   "ppr10k": 0.998,
+   "wiki": 0.908
+  },
+  "dff_fake_recall": 0.796
+ },
+ {
+  "n_train": 100,
+  "openai_auc": 0.990695,
+  "openai_recall": 0.905,
+  "openai_recall_by_model": {
+   "gpt-image-1.5": 0.90625,
+   "gpt-image-2": 0.8860759493670886,
+   "gpt-image-2.5": 0.9298245614035088
+  },
+  "real_acc": 0.98,
+  "real_acc_by_source": {
+   "easyportrait": 0.998,
+   "ffhq": 0.994,
+   "flickr30k": 0.998,
+   "pexels": 0.984,
+   "ppr10k": 1.0,
+   "wiki": 0.906
+  },
+  "dff_fake_recall": 0.8026666666666666
+ },
+ {
+  "n_train": 200,
+  "openai_auc": 0.9936600000000001,
+  "openai_recall": 0.935,
+  "openai_recall_by_model": {
+   "gpt-image-1.5": 0.9375,
+   "gpt-image-2": 0.9113924050632911,
+   "gpt-image-2.5": 0.9649122807017544
+  },
+  "real_acc": 0.981,
+  "real_acc_by_source": {
+   "easyportrait": 0.998,
+   "ffhq": 0.998,
+   "flickr30k": 0.998,
+   "pexels": 0.986,
+   "ppr10k": 1.0,
+   "wiki": 0.906
+  },
+  "dff_fake_recall": 0.7953333333333333
+ },
+ {
+  "n_train": 500,
+  "openai_auc": 0.9979799999999999,
+  "openai_recall": 0.98,
+  "openai_recall_by_model": {
+   "gpt-image-1.5": 0.96875,
+   "gpt-image-2": 0.9873417721518988,
+   "gpt-image-2.5": 0.9824561403508771
+  },
+  "real_acc": 0.9756666666666667,
+  "real_acc_by_source": {
+   "easyportrait": 0.986,
+   "ffhq": 1.0,
+   "flickr30k": 0.996,
+   "pexels": 0.976,
+   "ppr10k": 0.998,
+   "wiki": 0.898
+  },
+  "dff_fake_recall": 0.8126666666666666
+ },
+ {
+  "n_train": 897,
+  "openai_auc": 0.9986149999999999,
+  "openai_recall": 0.985,
+  "openai_recall_by_model": {
+   "gpt-image-1.5": 0.984375,
+   "gpt-image-2": 0.9873417721518988,
+   "gpt-image-2.5": 0.9824561403508771
+  },
+  "real_acc": 0.9783333333333334,
+  "real_acc_by_source": {
+   "easyportrait": 0.994,
+   "ffhq": 1.0,
+   "flickr30k": 0.992,
+   "pexels": 0.986,
+   "ppr10k": 0.998,
+   "wiki": 0.9
+  },
+  "dff_fake_recall": 0.794
+ }
+]

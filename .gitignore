@@ -1,0 +1,10 @@
+openai.key
+.venv/
+data/
+runs/
+runs_openai/
+logs/
+scans/
+weights/
+__pycache__/
+.DS_Store
