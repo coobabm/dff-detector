@@ -1,0 +1,119 @@
+{
+ "log": [
+  {
+   "epoch": 0,
+   "loss": 0.34826308457863825,
+   "val_video_auc": 0.9873949579831932,
+   "threshold": 0.14999999999999997
+  },
+  {
+   "epoch": 1,
+   "loss": 0.06708861167203092,
+   "val_video_auc": 0.9931245225362871,
+   "threshold": 0.05
+  },
+  {
+   "epoch": 2,
+   "loss": 0.032649582323327195,
+   "val_video_auc": 0.992742551566081,
+   "threshold": 0.32999999999999996
+  },
+  {
+   "epoch": 3,
+   "loss": 0.021527729266802756,
+   "val_video_auc": 0.9950343773873185,
+   "threshold": 0.30999999999999994
+  },
+  {
+   "epoch": 4,
+   "loss": 0.019303770575209152,
+   "val_video_auc": 0.9954163483575248,
+   "threshold": 0.05
+  }
+ ],
+ "test": {
+  "threshold": 0.05,
+  "real_video_acc": 0.9375,
+  "real_video_acc_by_source": {
+   "ffpp_real": 0.9722222222222222,
+   "hq_clip_real": 1.0,
+   "hq_raw_real": 0.8
+  },
+  "df40_heygen": {
+   "videos": 13,
+   "video_auc": 0.9971153846153846,
+   "video_recall": 1.0
+  },
+  "keling": {
+   "videos": 9,
+   "video_auc": 0.9125,
+   "video_recall": 0.6666666666666666
+  },
+  "kling": {
+   "videos": 3,
+   "video_auc": 0.9916666666666667,
+   "video_recall": 1.0
+  },
+  "rp_alpha": {
+   "videos": 2,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "rp_hunyuan": {
+   "videos": 5,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "rp_pika": {
+   "videos": 12,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "rp_pika2.2": {
+   "videos": 6,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "rp_ray2": {
+   "videos": 6,
+   "video_auc": 0.9875,
+   "video_recall": 1.0
+  },
+  "rp_sora": {
+   "videos": 6,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "rp_veo2": {
+   "videos": 6,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "rp_veo3": {
+   "videos": 5,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "rp_wan2.1": {
+   "videos": 1,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "sora2": {
+   "videos": 1,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "veo3": {
+   "videos": 11,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "wan2": {
+   "videos": 1,
+   "video_auc": 0.9375,
+   "video_recall": 1.0
+  },
+  "all_fakes_video_auc": 0.9886494252873563
+ }
+}

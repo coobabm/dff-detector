@@ -13,7 +13,9 @@ import csv
 import random
 import shutil
 import subprocess
+import sys
 import tempfile
+import time
 from pathlib import Path
 
 import cv2
@@ -89,18 +91,28 @@ def thb(rows, per_split={"train": 80, "test": 25}):
             kept = 0
             for f in fs[: per_split[split]]:
                 p = Path(tmp) / "v.mp4"
-                p.write_bytes(requests.get(f"{HF}/luchaoqi/TalkingHeadBench/resolve/main/{f}", timeout=120).content)
+                for attempt in range(4):
+                    try:
+                        r = requests.get(f"{HF}/luchaoqi/TalkingHeadBench/resolve/main/{f}", timeout=120)
+                        r.raise_for_status()
+                        p.write_bytes(r.content)
+                        break
+                    except Exception as e:
+                        print("  retry", f, e, flush=True)
+                        time.sleep(5 * (attempt + 1))
+                else:
+                    continue
                 if has_face(p):
                     keep(p, f"thb_{gen.lower()}", Path(f).stem, 1, f"thb/{Path(f).stem.split('--')[0]}", split, rows)
                     kept += 1
             print(f"thb_{gen.lower()} {split} kept {kept}", flush=True)
 
 
-def celebv_real(rows, take=200):
+def celebv_real(rows, take=200, zips=range(6, 10)):
     """4 s segments of raw CelebV-HQ videos from zips not used anywhere else."""
     kept = 0
     with tempfile.TemporaryDirectory() as tmp:
-        for zname in [f"videos_{i:04d}.zip" for i in range(6, 10)]:
+        for zname in [f"videos_{i:04d}.zip" for i in zips]:
             z = RemoteZip(f"{HF}/mengtingwei/celebv-HQ-raw-videos/resolve/main/{zname}")
             members = [i.filename for i in z.infolist() if i.filename.endswith(".mp4")]
             rng.shuffle(members)
@@ -126,11 +138,54 @@ def celebv_real(rows, take=200):
     print("celebv_real kept", kept, flush=True)
 
 
+def celebv_clips_real(rows, take=450):
+    """Short real CelebV-HQ talking-head clips, excluding the ones used for FaceFusion swaps."""
+    used = {Path(r["path"]).stem for r in csv.DictReader(open(DATA / "videos" / "hq_clip.csv"))}
+    files = sorted(f.path for f in HfApi().list_repo_tree("saeed-5959/celebv_hq_head_talking", repo_type="dataset",
+                                                         recursive=True) if f.path.endswith(".mp4"))
+    rng.shuffle(files)
+    kept = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        for f in files:
+            if kept >= take:
+                break
+            stem = Path(f).stem
+            if stem in used:
+                continue
+            p = Path(tmp) / "v.mp4"
+            try:
+                r = requests.get(f"{HF}/saeed-5959/celebv_hq_head_talking/resolve/main/{f}", timeout=120)
+                r.raise_for_status()
+                p.write_bytes(r.content)
+            except Exception as e:
+                print("  skip", f, e, flush=True)
+                continue
+            if has_face(p):
+                yt = stem.rsplit("_", 1)[0]
+                keep(p, "celebvclip_real", stem, 0, f"celebv/{yt}", split_of(f"celebv/{yt}"), rows)
+                kept += 1
+    print("celebvclip_real kept", kept, flush=True)
+
+
+STEPS = {"zips": (from_zips, lambda s: not s.startswith(("thb_", "celebv_"))),
+         "thb": (thb, lambda s: s.startswith("thb_")),
+         "celebv": (celebv_real, lambda s: s == "celebv_real"),
+         "celebv2": (lambda rows: celebv_real(rows, take=240, zips=range(10, 16)), lambda s: False),
+         "celebvclips": (celebv_clips_real, lambda s: s == "celebvclip_real")}
+
+
 def main():
+    """uv run fetch_aivid_videos.py [zips] [thb] [celebv]  (default: all). Rows of steps
+    not rerun are kept from the existing manifest."""
+    want = sys.argv[1:] or list(STEPS)
+    man = DATA / "videos" / "aivid.csv"
     rows = []
-    for step in (from_zips, thb, celebv_real):
-        step(rows)
-        with open(DATA / "videos" / "aivid.csv", "w", newline="") as f:
+    if man.exists():
+        rows = [list(r.values()) for r in csv.DictReader(open(man))
+                if not any(STEPS[w][1](r["source"]) for w in want)]
+    for w in want:
+        STEPS[w][0](rows)
+        with open(man, "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["path", "source", "label", "group", "split"])
             w.writerows(rows)

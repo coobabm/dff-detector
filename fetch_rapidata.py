@@ -28,7 +28,13 @@ REPOS = ["Rapidata/text-2-video-human-preferences-veo3", "Rapidata/text-2-video-
 def model_of(repo, name):
     if repo.endswith("veo3.1"):
         return "veo3.1"
-    return name.split("_")[1]
+    a, b = name.split("_")[:2]
+    # Most files are <prompt>_<model>_<seed>; some Veo 3 files are veo3_<prompt>_<seed>.
+    return a if not a.isdigit() else b
+
+
+def prompt_of(name):
+    return next(t for t in name.split("_") if t.isdigit())
 
 
 def main():
@@ -38,7 +44,7 @@ def main():
         for f in HfApi().list_repo_tree(repo, repo_type="dataset", recursive=True):
             if f.path.endswith(".mp4"):
                 name = Path(f.path).stem
-                jobs.append((repo, f.path, model_of(repo, name), f"{tag}/{name.split('_')[0]}"))
+                jobs.append((repo, f.path, model_of(repo, name), f"{tag}/{prompt_of(name)}"))
     print("videos", len(jobs), flush=True)
 
     def get(job):

@@ -1,0 +1,155 @@
+{
+ "log": [
+  {
+   "epoch": 0,
+   "loss": 0.5383181509363154,
+   "val_video_auc": 0.9795138888888889,
+   "threshold": 0.35999999999999993
+  },
+  {
+   "epoch": 1,
+   "loss": 0.16073903002093234,
+   "val_video_auc": 0.9828472222222222,
+   "threshold": 0.19
+  },
+  {
+   "epoch": 2,
+   "loss": 0.08450378547399305,
+   "val_video_auc": 0.9893055555555557,
+   "threshold": 0.36999999999999994
+  },
+  {
+   "epoch": 3,
+   "loss": 0.05921767285338137,
+   "val_video_auc": 0.9882638888888888,
+   "threshold": 0.63
+  },
+  {
+   "epoch": 4,
+   "loss": 0.04847729904941904,
+   "val_video_auc": 0.9878472222222222,
+   "threshold": 0.13999999999999999
+  }
+ ],
+ "test": {
+  "threshold": 0.36999999999999994,
+  "real_video_acc": 0.8504273504273504,
+  "real_video_acc_by_source": {
+   "celebv_real": 0.7432432432432432,
+   "ffpp_real": 0.9861111111111112,
+   "hq_clip_real": 0.875,
+   "hq_raw_real": 0.775
+  },
+  "df40_heygen": {
+   "videos": 26,
+   "video_auc": 0.9635108481262328,
+   "video_recall": 0.9230769230769231
+  },
+  "keling": {
+   "videos": 17,
+   "video_auc": 0.8504273504273504,
+   "video_recall": 0.7647058823529411
+  },
+  "kling": {
+   "videos": 5,
+   "video_auc": 0.9897435897435897,
+   "video_recall": 1.0
+  },
+  "rp_alpha": {
+   "videos": 3,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "rp_hunyuan": {
+   "videos": 9,
+   "video_auc": 0.9881291547958214,
+   "video_recall": 1.0
+  },
+  "rp_pika": {
+   "videos": 21,
+   "video_auc": 0.9951159951159951,
+   "video_recall": 1.0
+  },
+  "rp_pika2.2": {
+   "videos": 8,
+   "video_auc": 0.9738247863247863,
+   "video_recall": 1.0
+  },
+  "rp_ray2": {
+   "videos": 12,
+   "video_auc": 0.9430199430199431,
+   "video_recall": 0.8333333333333334
+  },
+  "rp_sora": {
+   "videos": 12,
+   "video_auc": 0.9743589743589743,
+   "video_recall": 0.9166666666666666
+  },
+  "rp_veo2": {
+   "videos": 9,
+   "video_auc": 0.9843304843304843,
+   "video_recall": 1.0
+  },
+  "rp_veo3": {
+   "videos": 17,
+   "video_auc": 0.9974861739567622,
+   "video_recall": 1.0
+  },
+  "rp_veo3.1": {
+   "videos": 13,
+   "video_auc": 0.9888231426692965,
+   "video_recall": 1.0
+  },
+  "rp_wan2.1": {
+   "videos": 2,
+   "video_auc": 1.0,
+   "video_recall": 1.0
+  },
+  "sora2": {
+   "videos": 2,
+   "video_auc": 0.9316239316239316,
+   "video_recall": 1.0
+  },
+  "thb_aniportraitaudio": {
+   "videos": 50,
+   "video_auc": 0.9716239316239316,
+   "video_recall": 0.96
+  },
+  "thb_aniportraitvideo": {
+   "videos": 50,
+   "video_auc": 0.9832478632478632,
+   "video_recall": 0.96
+  },
+  "thb_emoportrait": {
+   "videos": 50,
+   "video_auc": 0.9458119658119658,
+   "video_recall": 0.92
+  },
+  "thb_hallo": {
+   "videos": 50,
+   "video_auc": 0.9727350427350426,
+   "video_recall": 0.96
+  },
+  "thb_hallo2": {
+   "videos": 50,
+   "video_auc": 0.9872649572649573,
+   "video_recall": 1.0
+  },
+  "thb_liveportrait": {
+   "videos": 46,
+   "video_auc": 0.9490895577852099,
+   "video_recall": 0.8260869565217391
+  },
+  "veo3": {
+   "videos": 22,
+   "video_auc": 0.9920357420357421,
+   "video_recall": 1.0
+  },
+  "wan2": {
+   "videos": 1,
+   "video_auc": 0.7094017094017093,
+   "video_recall": 0.0
+  },
+  "all_fakes_video_auc": 0.9680161943319838
+ }
+}
