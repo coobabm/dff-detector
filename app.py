@@ -381,8 +381,9 @@ THEME = gr.themes.Base(
     link_text_color="#1D1F21",
 )
 CSS = """
-:root { --ink:#1D1F21; --graphite:#5A6068; --rule:#E2E5E8; --shade:#F5F6F7; --marker:#F7D046;
+:root { color-scheme: light; --ink:#1D1F21; --graphite:#5A6068; --rule:#E2E5E8; --shade:#F5F6F7; --marker:#F7D046;
         --alarm:#C8372D; --alarm-hl:#F8D2CD; --clear:#1E7F4F; --clear-hl:#CFEBD9; }
+html, body { background: #FFFFFF !important; color: var(--ink) !important; }
 .gradio-container { max-width: 1040px !important; width: 100% !important; margin: 0 auto !important; }
 .gradio-container .main, .gradio-container .contain, .gradio-container .wrap.main { width: 100% !important; }
 footer { opacity: .5; }
@@ -466,7 +467,13 @@ button[role="tab"][aria-selected="true"]::after, .tab-wrapper button.selected::a
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 """
-STYLE = dict(theme=THEME, css=CSS)
+# The design is light-only: drop Gradio's automatic dark mode (it follows the OS setting).
+FORCE_LIGHT = """() => {
+  const light = () => document.querySelectorAll('.dark').forEach((el) => el.classList.remove('dark'));
+  light();
+  new MutationObserver(light).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'] });
+}"""
+STYLE = dict(theme=THEME, css=CSS, js=FORCE_LIGHT)
 
 
 def brand(lang="zh"):
