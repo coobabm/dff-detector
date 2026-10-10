@@ -386,7 +386,16 @@ CSS = """
 html, body { background: #FFFFFF !important; color: var(--ink) !important; }
 .gradio-container { max-width: 1040px !important; width: 100% !important; margin: 0 auto !important; }
 .gradio-container .main, .gradio-container .contain, .gradio-container .wrap.main { width: 100% !important; }
-footer { opacity: .5; }
+footer { display: none !important; }
+
+/* Gradio's built-in upload prompt follows the browser language, not our switch: replace it. */
+:root { --drop-text: "将文件拖到这里，或点击选择"; }
+body[data-lang="English"] { --drop-text: "Drop a file here, or click to choose one"; }
+body[data-lang="한국어"] { --drop-text: "파일을 여기에 놓거나 클릭해서 선택하세요"; }
+[data-testid="upload-text"] { font-size: 0 !important; }
+[data-testid="upload-text"] .or { display: none; }
+[data-testid="upload-text"]::after { content: var(--drop-text); display: block; font-size: .98rem; color: var(--graphite);
+  margin-top: 8px; }
 :focus-visible { outline: 3px solid var(--marker) !important; outline-offset: 2px; }
 
 /* top bar: name left, language right, one rule under it */
@@ -531,7 +540,8 @@ with gr.Blocks(title="AI Face Detector", delete_cache=(3600, 3600)) as demo:
                 gr.update(value=empty), gr.update(value=empty))
 
     lang.change(relabel, lang, [title, tab_auto, tab_pick, tab_arms, up, go, ulbl, ucam, ugal,
-                                inp, run, btn, lbl, cam, arms_intro, table, umd, md])
+                                inp, run, btn, lbl, cam, arms_intro, table, umd, md],
+                js="(v) => { document.body.dataset.lang = v; return v; }")
 
     def refresh():
         names = run_names()
