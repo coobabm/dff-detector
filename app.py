@@ -151,11 +151,20 @@ def meter(p, thr):
             f'<i style="width:{p * 100:.1f}%"></i><b style="left:{thr * 100:.1f}%"></b></div>')
 
 
+STATUS = {"zh": {"fake": "可疑", "real": "正常"}, "en": {"fake": "Suspicious", "real": "Normal"},
+          "ko": {"fake": "의심", "real": "정상"}}
+
+
 def report(kind, verdict, detail="", rows=None, t=None, note=""):
-    """Inspection report card. kind: fake | real | empty | error."""
-    body = f'<div class="verdict">{esc(verdict)}</div>'
+    """Verdict strip. kind: fake | real | empty | error. Left: status + verdict; right: per-detector evidence."""
+    status = ""
+    if kind in ("fake", "real") and t is not None:
+        code = next(c for c, v in TXT.items() if v is t)
+        status = f'<span class="status">{esc(STATUS[code][kind])}</span>'
+    body = f'<div class="lead">{status}<div class="verdict">{esc(verdict)}</div>'
     if detail:
         body += f'<p class="detail">{detail}</p>'
+    body += '</div><div class="evidence">'
     if rows:
         body += (f'<table class="dets"><thead><tr><th>{esc(t["c_det"])}</th><th>{esc(t["c_score"])}</th>'
                  f'<th class="num">{esc(t["c_thr"])}</th><th class="num">{esc(t["c_frames"])}</th></tr></thead><tbody>')
@@ -164,9 +173,11 @@ def report(kind, verdict, detail="", rows=None, t=None, note=""):
                      f'<td>{meter(p, thr)}<span class="score">{p:.2f}</span></td>'
                      f'<td class="num">{thr:.2f}</td><td class="num">{n}</td></tr>')
         body += "</tbody></table>"
+    body += "</div>"
     if note:
         body += f'<p class="note">{esc(note)}</p>'
-    return f'<section class="report {kind}" aria-live="polite">{body}</section>'
+    layout = "" if rows else " single"
+    return f'<section class="report {kind}{layout}" aria-live="polite">{body}</section>'
 
 
 def run_names():
@@ -354,107 +365,105 @@ def results_table(lang="zh"):
     return head + "\n".join(rows) + "\n\n" + t["tbl_foot"]
 
 
-UV = gr.themes.Color(  # forensic UV-light violet
-    c50="#F1F0FD", c100="#E3E0FB", c200="#C8C2F6", c300="#A69CEF", c400="#8173E5",
-    c500="#5F50DA", c600="#4B3FCF", c700="#3D32B0", c800="#30288A", c900="#251F6A", c950="#17134A",
-)
 THEME = gr.themes.Base(
-    primary_hue=UV, neutral_hue="slate", radius_size=gr.themes.sizes.radius_sm,
+    primary_hue="yellow", neutral_hue="zinc", radius_size=gr.themes.sizes.radius_sm,
     font=[gr.themes.GoogleFont("IBM Plex Sans KR"), gr.themes.GoogleFont("Noto Sans SC"), "system-ui", "sans-serif"],
     font_mono=[gr.themes.GoogleFont("IBM Plex Mono"), "ui-monospace", "monospace"],
 ).set(
-    body_background_fill="#F3F5F7", body_text_color="#17202B", body_text_color_subdued="#5E6B7A",
-    block_background_fill="#FFFFFF", block_border_color="#D6DDE5", block_border_width="1px", block_shadow="none",
-    block_label_background_fill="#FFFFFF", block_label_text_color="#5E6B7A", block_title_text_color="#5E6B7A",
-    border_color_primary="#D6DDE5", input_background_fill="#FFFFFF",
-    button_primary_background_fill="#4B3FCF", button_primary_background_fill_hover="#3D32B0",
-    button_primary_text_color="#FFFFFF", button_primary_border_color="#4B3FCF",
+    body_background_fill="#FFFFFF", body_text_color="#1D1F21", body_text_color_subdued="#5A6068",
+    block_background_fill="#FFFFFF", block_border_color="#E2E5E8", block_border_width="1px", block_shadow="none",
+    block_label_background_fill="#FFFFFF", block_label_text_color="#5A6068", block_title_text_color="#5A6068",
+    border_color_primary="#E2E5E8", border_color_accent="#1D1F21", input_background_fill="#FFFFFF",
+    color_accent="#1D1F21", color_accent_soft="#FBEFB5",
+    button_primary_background_fill="#1D1F21", button_primary_background_fill_hover="#383C40",
+    button_primary_text_color="#FFFFFF", button_primary_border_color="#1D1F21",
     button_large_text_size="1rem", button_large_padding="14px 20px",
-    link_text_color="#4B3FCF",
+    link_text_color="#1D1F21",
 )
 CSS = """
-:root { --ink:#17202B; --slate:#5E6B7A; --rule:#D6DDE5; --paper:#F3F5F7; --uv:#4B3FCF;
-        --alarm:#C2410C; --alarm-bg:#FFF4EE; --clear:#0E7A5A; --clear-bg:#EEF8F4; }
-.gradio-container { max-width: 1180px !important; width: 100% !important; margin: 0 auto !important; }
+:root { --ink:#1D1F21; --graphite:#5A6068; --rule:#E2E5E8; --shade:#F5F6F7; --marker:#F7D046;
+        --alarm:#C8372D; --alarm-hl:#F8D2CD; --clear:#1E7F4F; --clear-hl:#CFEBD9; }
+.gradio-container { max-width: 1040px !important; width: 100% !important; margin: 0 auto !important; }
 .gradio-container .main, .gradio-container .contain, .gradio-container .wrap.main { width: 100% !important; }
-footer { opacity: .55; }
+footer { opacity: .5; }
+:focus-visible { outline: 3px solid var(--marker) !important; outline-offset: 2px; }
 
-/* header: title left, language switch right */
-#masthead { align-items: end; gap: 24px; padding: 28px 0 8px; }
-#brand h1 { font-size: clamp(1.9rem, 3.2vw, 2.6rem); line-height: 1.15; font-weight: 600; letter-spacing: -0.01em;
-            margin: 0 0 8px; color: var(--ink); }
-#brand p { margin: 0; color: var(--slate); font-size: 1rem; max-width: 62ch; }
-#brand .mark { display: inline-block; width: .62em; height: .62em; margin-right: .32em; vertical-align: .06em;
-               border: 3px solid var(--uv); border-radius: 2px; }
+/* top bar: name left, language right, one rule under it */
+#masthead { align-items: center; gap: 16px; padding: 22px 0 18px; border-bottom: 1px solid var(--rule); margin-bottom: 8px; }
+#brand h1 { font-size: 1.5rem; line-height: 1.2; font-weight: 700; margin: 0; color: var(--ink); }
+#brand h1 .hl { background: linear-gradient(transparent 58%, var(--marker) 58%, var(--marker) 92%, transparent 92%);
+                padding: 0 .08em; }
+#brand p { margin: 4px 0 0; color: var(--graphite); font-size: .95rem; }
 #lang, #lang fieldset, #lang > div { background: transparent !important; border: 0 !important; padding: 0 !important;
   box-shadow: none !important; }
-#lang .wrap { gap: 0 !important; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; width: fit-content;
-              margin-left: auto; background: #fff; }
-#lang label { margin: 0 !important; border: 0 !important; border-radius: 0 !important; padding: 7px 14px !important;
-              background: transparent !important; box-shadow: none !important; cursor: pointer; color: var(--slate); }
-#lang label + label { border-left: 1px solid var(--rule) !important; }
-#lang .wrap { border: 1px solid var(--rule) !important; }
-#lang input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-#lang label:has(input:checked) { background: var(--ink) !important; color: #fff !important; }
-#lang label:focus-within { outline: 2px solid var(--uv); outline-offset: -2px; }
-#lang > span, #lang .block-title { display: none; }
 .form:has(#lang), div:has(> #lang) { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+#lang > span, #lang .block-title { display: none; }
+#lang .wrap { gap: 4px !important; width: fit-content; margin-left: auto; border: 0 !important; }
+#lang label { margin: 0 !important; border: 0 !important; border-radius: 0 !important; padding: 4px 6px !important;
+  background: transparent !important; box-shadow: none !important; cursor: pointer; color: var(--graphite); }
+#lang input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+#lang label:has(input:checked) { color: var(--ink) !important; font-weight: 600;
+  background: linear-gradient(transparent 62%, var(--marker) 62%) !important; }
 
-/* tabs */
-.tab-wrapper { margin-top: 6px; }
-button[role="tab"] { font-size: .98rem !important; }
+/* tabs: ink text, highlighter underline */
+button[role="tab"] { font-size: .98rem !important; color: var(--graphite) !important; }
+button[role="tab"][aria-selected="true"] { color: var(--ink) !important; font-weight: 600; }
+button[role="tab"][aria-selected="true"]::after, .tab-wrapper button.selected::after { background: var(--marker) !important; height: 3px !important; }
 
-/* upload area as a viewfinder: corner brackets like a face-detection box */
-#viewfinder { position: relative; border: 1px solid var(--rule) !important; background: #FBFCFD !important;
-              min-height: 340px; }
-#viewfinder::after { content: ""; position: absolute; inset: 46px 16px 16px; pointer-events: none; z-index: 2;
-  --c: var(--uv); --l: 30px; --w: 3px;
-  background:
-    linear-gradient(var(--c),var(--c)) top left / var(--l) var(--w) no-repeat,
-    linear-gradient(var(--c),var(--c)) top left / var(--w) var(--l) no-repeat,
-    linear-gradient(var(--c),var(--c)) top right / var(--l) var(--w) no-repeat,
-    linear-gradient(var(--c),var(--c)) top right / var(--w) var(--l) no-repeat,
-    linear-gradient(var(--c),var(--c)) bottom left / var(--l) var(--w) no-repeat,
-    linear-gradient(var(--c),var(--c)) bottom left / var(--w) var(--l) no-repeat,
-    linear-gradient(var(--c),var(--c)) bottom right / var(--l) var(--w) no-repeat,
-    linear-gradient(var(--c),var(--c)) bottom right / var(--w) var(--l) no-repeat; }
-#viewfinder .wrap, #viewfinder button { background: transparent !important; }
+/* step 1: the drop stage, full width */
+#stage { border: 1.5px dashed #C9CED3 !important; background: var(--shade) !important; }
+#stage:hover { border-color: var(--ink) !important; }
+#stage .wrap, #stage button { background: transparent !important; }
+#run-row { margin: 4px 0 10px; }
 
-/* inspection report */
-.report { border: 1px solid var(--rule); border-left: 6px solid var(--slate); background: #fff;
-          padding: 22px 24px 18px; border-radius: 4px; }
-.report.fake { border-left-color: var(--alarm); background: linear-gradient(90deg, var(--alarm-bg), #fff 55%); }
-.report.real { border-left-color: var(--clear); background: linear-gradient(90deg, var(--clear-bg), #fff 55%); }
-.report.empty { border-left-color: var(--rule); border-style: dashed; border-left-style: solid; color: var(--slate); }
-.report.error { border-left-color: var(--slate); }
-.report .verdict { font-size: clamp(1.6rem, 2.6vw, 2.2rem); font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
-.report.fake .verdict { color: var(--alarm); }
-.report.real .verdict { color: var(--clear); }
-.report .detail { margin: 8px 0 0; color: var(--ink); font-size: 1rem; }
-.report .detail strong { font-weight: 600; }
-.report .detail code { background: var(--paper); padding: 1px 6px; border-radius: 3px; font-size: .85em; }
-.report .note { margin: 14px 0 0; color: var(--slate); font-size: .86rem; }
+/* step 2: verdict strip */
+.report { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 1.6fr); column-gap: 32px; row-gap: 6px;
+          align-items: start; border-top: 2px solid var(--ink); padding: 22px 2px 4px; }
+.report .lead { min-width: 0; }
+.report.single { grid-template-columns: 1fr; }
+.report.single .evidence { display: none; }
+.report .verdict { font-size: clamp(1.7rem, 3vw, 2.3rem); font-weight: 700; line-height: 1.15; color: var(--ink);
+                   display: inline; padding: 0 .1em; }
+.report.fake .verdict { background: linear-gradient(transparent 55%, var(--alarm-hl) 55%); }
+.report.real .verdict { background: linear-gradient(transparent 55%, var(--clear-hl) 55%); }
+.report .status { display: block; margin-bottom: 10px; font-size: .9rem; font-weight: 600; }
+.report .status::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+                          margin-right: 8px; background: var(--graphite); vertical-align: 0; }
+.report.fake .status { color: var(--alarm); } .report.fake .status::before { background: var(--alarm); }
+.report.real .status { color: var(--clear); } .report.real .status::before { background: var(--clear); }
+.report .detail { margin: 12px 0 0; color: var(--ink); font-size: 1rem; }
+.report .detail code { background: var(--shade); padding: 1px 6px; border-radius: 3px; font-size: .85em; }
+.report .evidence { min-width: 0; }
+.report .note { grid-column: 1 / -1; margin: 14px 0 0; color: var(--graphite); font-size: .86rem; }
+.report.empty, .report.error { display: block; border-top: 1px solid var(--rule); color: var(--graphite); }
 .report.empty .note { margin: 0; font-size: 1rem; }
-.meter { position: relative; height: 8px; background: #E4E9EF; border-radius: 4px; margin: 12px 0 2px; max-width: 420px; }
-.meter i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--clear); }
+.report.error .verdict { font-size: 1.3rem; }
+.meter { position: relative; height: 10px; background: #E9ECEF; margin: 14px 0 2px; max-width: 460px; }
+.meter i { position: absolute; inset: 0 auto 0 0; background: var(--clear); }
 .meter.fake i { background: var(--alarm); }
-.meter b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); }
-.report table.dets { width: 100%; border-collapse: collapse !important; margin-top: 16px; font-size: .94rem;
-  border: 0 !important; background: transparent !important; }
+.meter b { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--ink); }
+.report table.dets { width: 100%; border-collapse: collapse !important; font-size: .94rem; border: 0 !important;
+  background: transparent !important; margin: 0; }
 .report table.dets tr { border: 0 !important; background: transparent !important; }
 .report table.dets th, .report table.dets td { border: 0 !important; border-bottom: 1px solid var(--rule) !important;
   background: transparent !important; white-space: nowrap; }
 .report table.dets td:first-child { white-space: normal; }
-.report table.dets th { text-align: left; font-weight: 500; color: var(--slate); padding: 6px 8px; }
-.report table.dets td { padding: 10px 8px; vertical-align: middle; }
-.report table.dets td .meter { margin: 0 8px 0 0; display: inline-block; width: 120px; vertical-align: middle; }
-table.dets .score { display: inline-block; width: 44px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-table.dets tr.fake .score { color: var(--alarm); }
-table.dets tr.real .score { color: var(--clear); }
-table.dets .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--slate); }
+.report table.dets th { text-align: left; font-weight: 500; color: var(--graphite); padding: 4px 8px 8px; }
+.report table.dets td { padding: 12px 8px; vertical-align: middle; }
+.report table.dets td .meter { margin: 0 10px 0 0; display: inline-block; width: 120px; vertical-align: middle; }
+.report table.dets .score { display: inline-block; width: 40px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.report table.dets tr.fake .score { color: var(--alarm); }
+.report table.dets tr.real .score { color: var(--clear); }
+.report table.dets .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--graphite); }
+
+/* step 3: evidence (heatmap / frames) */
 .heat, #frames { border-color: var(--rule) !important; }
-@media (max-width: 720px) { #masthead { flex-direction: column; align-items: stretch; }
-  #lang .wrap { margin-left: 0; } table.dets .num { display: none; } }
+@media (max-width: 760px) {
+  #masthead { flex-direction: column; align-items: flex-start; }
+  #lang .wrap { margin-left: 0; }
+  .report { grid-template-columns: 1fr; }
+  .report table.dets .num { display: none; }
+}
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 """
 STYLE = dict(theme=THEME, css=CSS)
@@ -463,39 +472,37 @@ STYLE = dict(theme=THEME, css=CSS)
 def brand(lang="zh"):
     t = TXT[lang]
     head = t["title"].split("\n", 1)[0].lstrip("# ")
-    return f'<div id="brand"><h1><span class="mark" aria-hidden="true"></span>{esc(head)}</h1><p>{esc(t["sub"])}</p></div>'
+    return f'<div id="brand"><h1><span class="hl">{esc(head)}</span></h1><p>{esc(t["sub"])}</p></div>'
 
 
 with gr.Blocks(title="AI Face Detector", delete_cache=(3600, 3600)) as demo:
     with gr.Row(elem_id="masthead"):
         title = gr.HTML(brand("zh"), scale=3)
         lang = gr.Radio(list(LANGS), value="中文", label="Language / 언어 / 语言", show_label=False,
-                        elem_id="lang", scale=1, min_width=260)
+                        elem_id="lang", scale=1, min_width=220)
     with gr.Tab(TXT["zh"]["tab_auto"]) as tab_auto:
-        with gr.Row(equal_height=False):
-            with gr.Column(scale=5):
-                up = gr.File(label=TXT["zh"]["upload"], type="filepath", file_types=["image", "video", ".heic", ".heif"],
-                             elem_id="viewfinder", height=340)
-                go = gr.Button(TXT["zh"]["detect"], variant="primary", size="lg")
-            with gr.Column(scale=6):
-                umd = gr.HTML(report("empty", "", "", t=TXT["zh"], note=TXT["zh"]["empty"]))
-                ulbl = gr.Label(label=TXT["zh"]["prob"], visible=False)
-                ucam = gr.Image(label=TXT["zh"]["cam"], height=320, visible=False, elem_classes=["heat"])
-                ugal = gr.Gallery(label=TXT["zh"]["gallery"], columns=4, height="auto", visible=False, elem_id="frames")
+        up = gr.File(label=TXT["zh"]["upload"], type="filepath", file_types=["image", "video", ".heic", ".heif"],
+                     elem_id="stage", height=230)
+        with gr.Row(elem_id="run-row"):
+            go = gr.Button(TXT["zh"]["detect"], variant="primary", size="lg")
+        umd = gr.HTML(report("empty", "", "", t=TXT["zh"], note=TXT["zh"]["empty"]))
+        ulbl = gr.Label(label=TXT["zh"]["prob"], visible=False)
+        ucam = gr.Image(label=TXT["zh"]["cam"], height=340, visible=False, elem_classes=["heat"])
+        ugal = gr.Gallery(label=TXT["zh"]["gallery"], columns=6, rows=2, height=360, object_fit="cover",
+                          visible=False, elem_id="frames")
         go.click(analyze_any_ui, [up, lang], [ulbl, ucam, umd, ugal], api_name="analyze_any",
                  concurrency_id="detector", concurrency_limit=1)
         up.upload(analyze_any_ui, [up, lang], [ulbl, ucam, umd, ugal], api_name="analyze_any_upload",
                   concurrency_id="detector", concurrency_limit=1)
     with gr.Tab(TXT["zh"]["tab_pick"]) as tab_pick:
-        with gr.Row(equal_height=False):
-            with gr.Column(scale=5):
-                inp = gr.Image(type="pil", label=TXT["zh"]["img_in"], height=340)
+        with gr.Row(equal_height=True):
+            inp = gr.Image(type="pil", label=TXT["zh"]["img_in"], height=300, scale=3)
+            with gr.Column(scale=2):
                 run = gr.Dropdown(run_names(), label=TXT["zh"]["model"], allow_custom_value=False)
                 btn = gr.Button(TXT["zh"]["detect"], variant="primary", size="lg")
-            with gr.Column(scale=6):
-                md = gr.HTML(report("empty", "", "", t=TXT["zh"], note=TXT["zh"]["empty"]))
-                lbl = gr.Label(label=TXT["zh"]["prob"], visible=False)
-                cam = gr.Image(label=TXT["zh"]["cam_pick"], height=340, visible=False, elem_classes=["heat"])
+        md = gr.HTML(report("empty", "", "", t=TXT["zh"], note=TXT["zh"]["empty"]))
+        lbl = gr.Label(label=TXT["zh"]["prob"], visible=False)
+        cam = gr.Image(label=TXT["zh"]["cam_pick"], height=380, visible=False, elem_classes=["heat"])
         btn.click(analyze_pick_ui, [inp, run, lang], [lbl, cam, md], concurrency_id="detector", concurrency_limit=1)
         inp.change(analyze_pick_ui, [inp, run, lang], [lbl, cam, md], concurrency_id="detector", concurrency_limit=1)
     with gr.Tab(TXT["zh"]["tab_arms"]) as tab_arms:
