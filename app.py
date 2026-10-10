@@ -46,7 +46,7 @@ tf = T.Compose([T.Resize(224), T.CenterCrop(224), T.ToTensor(), T.Normalize(MEAN
 LANGS = {"中文": "zh", "English": "en", "한국어": "ko"}
 TXT = {
     "zh": {
-        "title": "# AI 生成人脸鉴别\n上传含**人脸**的图片或视频，自动选择合适的检测模型。",
+        "title": "# AI 生成人脸鉴别\n上传含**人脸**的图片或视频，自动选择合适的检测模型。模型分数不是鉴定结论。",
         "tab_auto": "一键检测", "tab_pick": "单图·选模型", "tab_arms": "跨生成器测试（arms race）",
         "upload": "上传图片或视频（JPG / PNG / HEIC / MP4 / MOV）", "detect": "检测",
         "prob": "概率", "cam": "图片：模型关注区域（越红越像 AI）", "gallery": "视频：检测到的人脸帧",
@@ -69,7 +69,7 @@ TXT = {
         "gens": {"text2img": "SD 文生图", "inpainting": "SD Inpainting", "insight": "InsightFace 换脸"},
     },
     "en": {
-        "title": "# AI-generated face detection\nUpload an image or video containing a **face**; the right detector is chosen automatically.",
+        "title": "# AI-generated face detection\nUpload an image or video containing a **face**; the right detector is chosen automatically. Scores are not proof of authenticity.",
         "tab_auto": "Detect", "tab_pick": "Pick a model (image)", "tab_arms": "Cross-generator test (arms race)",
         "upload": "Upload an image or video (JPG / PNG / HEIC / MP4 / MOV)", "detect": "Detect",
         "prob": "Probability", "cam": "Image: where the model looks (redder = more AI-like)",
@@ -93,7 +93,7 @@ TXT = {
         "gens": {"text2img": "SD text2img", "inpainting": "SD inpainting", "insight": "InsightFace swap"},
     },
     "ko": {
-        "title": "# AI 생성 얼굴 판별\n**얼굴**이 있는 이미지나 영상을 올리면 알맞은 탐지 모델을 자동으로 고릅니다.",
+        "title": "# AI 생성 얼굴 판별\n**얼굴**이 있는 이미지나 영상을 올리면 알맞은 탐지 모델을 자동으로 고릅니다. 모델 점수는 진위 판정의 근거가 아닙니다.",
         "tab_auto": "탐지", "tab_pick": "이미지·모델 선택", "tab_arms": "생성기 교차 테스트 (arms race)",
         "upload": "이미지 또는 영상 업로드 (JPG / PNG / HEIC / MP4 / MOV)", "detect": "탐지",
         "prob": "확률", "cam": "이미지: 모델이 주목한 영역 (빨갈수록 AI 같음)", "gallery": "영상: 검출된 얼굴 프레임",
@@ -125,7 +125,9 @@ def run_names():
 @lru_cache(maxsize=8)
 def load(name):
     m = build_model(pretrained=False)
-    m.load_state_dict(torch.load(RUNS / name / "model.pt", map_location="cpu"))
+    if name not in run_names():
+        raise gr.Error("unknown model")
+    m.load_state_dict(torch.load(RUNS / name / "model.pt", map_location="cpu", weights_only=True))
     return m.to(DEVICE).eval()
 
 
@@ -136,7 +138,7 @@ def load_b4(ckpt):
         return None
     from train_swap import build as build_b4
 
-    ck = torch.load(ckpt, map_location="cpu")
+    ck = torch.load(ckpt, map_location="cpu", weights_only=True)
     m = build_b4(pretrained=False)
     m.load_state_dict(ck["model"])
     return m.to(DEVICE).eval(), ck["threshold"]
@@ -258,6 +260,8 @@ def analyze_any(file, lang_name="中文"):
 
 
 def analyze_pick(img, run, lang_name="中文"):
+    if run is not None and run not in run_names():  # whitelist: only trained models in runs/
+        raise gr.Error("unknown model")
     return analyze(img, run, LANGS.get(lang_name, "zh"))
 
 
@@ -282,7 +286,7 @@ def results_table(lang="zh"):
     return head + "\n".join(rows) + "\n\n" + t["tbl_foot"]
 
 
-with gr.Blocks(title="AI Face Detector") as demo:
+with gr.Blocks(title="AI Face Detector", delete_cache=(3600, 3600)) as demo:
     lang = gr.Radio(list(LANGS), value="中文", label="Language / 언어 / 语言")
     title = gr.Markdown(TXT["zh"]["title"])
     with gr.Tab(TXT["zh"]["tab_auto"]) as tab_auto:
@@ -295,20 +299,20 @@ with gr.Blocks(title="AI Face Detector") as demo:
                 ulbl = gr.Label(label=TXT["zh"]["prob"])
                 ucam = gr.Image(label=TXT["zh"]["cam"], height=320)
                 ugal = gr.Gallery(label=TXT["zh"]["gallery"], columns=4, height=320)
-        go.click(analyze_any, [up, lang], [ulbl, ucam, umd, ugal])
-        up.upload(analyze_any, [up, lang], [ulbl, ucam, umd, ugal])
+        go.click(analyze_any, [up, lang], [ulbl, ucam, umd, ugal], api_name="analyze_any", concurrency_id="detector", concurrency_limit=1)
+        up.upload(analyze_any, [up, lang], [ulbl, ucam, umd, ugal], api_name="analyze_any_upload", concurrency_id="detector", concurrency_limit=1)
     with gr.Tab(TXT["zh"]["tab_pick"]) as tab_pick:
         with gr.Row():
             with gr.Column():
                 inp = gr.Image(type="pil", label=TXT["zh"]["img_in"], height=360)
-                run = gr.Dropdown(run_names(), label=TXT["zh"]["model"], allow_custom_value=True)
+                run = gr.Dropdown(run_names(), label=TXT["zh"]["model"], allow_custom_value=False)
                 btn = gr.Button(TXT["zh"]["detect"], variant="primary")
             with gr.Column():
                 md = gr.Markdown()
                 lbl = gr.Label(label=TXT["zh"]["prob"])
                 cam = gr.Image(label=TXT["zh"]["cam_pick"], height=360)
-        btn.click(analyze_pick, [inp, run, lang], [lbl, cam, md])
-        inp.change(analyze_pick, [inp, run, lang], [lbl, cam, md])
+        btn.click(analyze_pick, [inp, run, lang], [lbl, cam, md], concurrency_id="detector", concurrency_limit=1)
+        inp.change(analyze_pick, [inp, run, lang], [lbl, cam, md], concurrency_id="detector", concurrency_limit=1)
     with gr.Tab(TXT["zh"]["tab_arms"]) as tab_arms:
         arms_intro = gr.Markdown(TXT["zh"]["arms_intro"])
         table = gr.Markdown()
