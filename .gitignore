@@ -12,3 +12,10 @@ scans_swap/
 runs_swap/
 runs_aivid/
 journal/
+
+# third-party detectors (UnivFD / NPR / B-Free): licences, not redistributed
+external/
+
+# score caches (include private test rows) and server notes
+results/scores/
+DEPLOYMENT.md

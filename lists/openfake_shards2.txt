@@ -1,0 +1,10 @@
+core/train-00017-of-00032-00010.parquet
+core/train-00008-of-00032-00003.parquet
+core/train-00021-of-00032-00007.parquet
+core/train-00002-of-00032-00012.parquet
+core/train-00003-of-00032-00018.parquet
+core/train-00029-of-00032-00000.parquet
+core/train-00005-of-00032-00002.parquet
+core/train-00019-of-00032-00015.parquet
+core/train-00031-of-00032-00010.parquet
+core/train-00003-of-00032-00003.parquet

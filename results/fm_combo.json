@@ -1,0 +1,51 @@
+{
+ "live": {
+  "threshold": 0.7150311470031738,
+  "photo_real": 0.969,
+  "video_real_frames": 0.955,
+  "ai_video_frames": 0.608,
+  "swap_frames": 0.538,
+  "openai": 1.0,
+  "dff_fake": 0.817,
+  "stylegan": 0.978,
+  "gan_set_real": 1.0,
+  "reddit_real": 0.981,
+  "fairface": 0.999,
+  "openfake_real": 0.975,
+  "aligned_real": 0.97,
+  "reddit_ai": 0.85,
+  "sfhq": 0.999,
+  "openfake": 0.705,
+  "aligned_vae": 0.202,
+  "aligned_inpaint": 0.327,
+  "rapidata_unseen": 0.924
+ },
+ "best": {
+  "members": [
+   "fm_ft_clip_l14_lora",
+   "fm_ft_dinov2_b"
+  ],
+  "tta": false,
+  "row": {
+   "threshold": 0.522139847278595,
+   "photo_real": 0.967,
+   "video_real_frames": 0.953,
+   "ai_video_frames": 0.793,
+   "swap_frames": 0.639,
+   "openai": 1.0,
+   "dff_fake": 0.893,
+   "stylegan": 0.994,
+   "gan_set_real": 1.0,
+   "reddit_real": 0.977,
+   "fairface": 0.997,
+   "openfake_real": 0.978,
+   "aligned_real": 0.97,
+   "reddit_ai": 0.897,
+   "sfhq": 0.999,
+   "openfake": 0.841,
+   "aligned_vae": 0.416,
+   "aligned_inpaint": 0.59,
+   "rapidata_unseen": 0.964
+  }
+ }
+}

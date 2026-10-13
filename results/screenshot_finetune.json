@@ -1,0 +1,502 @@
+{
+ "before": {
+  "video_frames": {
+   "celebv_clips": {
+    "n": 982,
+    "acc": 0.9419551934826884
+   },
+   "celebv_raw": {
+    "n": 79,
+    "acc": 0.9367088607594937
+   },
+   "df40_heygen": {
+    "n": 104,
+    "recall": 0.009615384615384616
+   },
+   "df40_inswap": {
+    "n": 152,
+    "recall": 0.42105263157894735
+   },
+   "df40_simswap": {
+    "n": 216,
+    "recall": 0.3611111111111111
+   },
+   "df40_uniface": {
+    "n": 192,
+    "recall": 0.4947916666666667
+   },
+   "ffpp_deepfakes": {
+    "n": 96,
+    "recall": 0.40625
+   },
+   "ffpp_face2face": {
+    "n": 72,
+    "recall": 0.2222222222222222
+   },
+   "ffpp_faceshifter": {
+    "n": 112,
+    "recall": 0.375
+   },
+   "ffpp_faceswap": {
+    "n": 96,
+    "recall": 0.3645833333333333
+   },
+   "ffpp_neuraltextures": {
+    "n": 96,
+    "recall": 0.3020833333333333
+   },
+   "ffpp_real": {
+    "n": 432,
+    "acc": 0.6828703703703703
+   },
+   "ffusion2_alphaface_256": {
+    "n": 66,
+    "recall": 0.045454545454545456
+   },
+   "ffusion2_hyperswap_1a_256": {
+    "n": 64,
+    "recall": 0.078125
+   },
+   "ffusion2_hyperswap_1b_256": {
+    "n": 38,
+    "recall": 0.10526315789473684
+   },
+   "ffusion2_hyperswap_1c_256": {
+    "n": 67,
+    "recall": 0.08955223880597014
+   },
+   "ffusion2_inswapper_128": {
+    "n": 35,
+    "recall": 0.22857142857142856
+   },
+   "ffusion2_real": {
+    "n": 141,
+    "acc": 0.8865248226950354
+   },
+   "ffusion_alphaface_256": {
+    "n": 32,
+    "recall": 0.0625
+   },
+   "ffusion_hyperswap_1a_256": {
+    "n": 24,
+    "recall": 0.041666666666666664
+   },
+   "ffusion_hyperswap_1b_256": {
+    "n": 16,
+    "recall": 0.0
+   },
+   "ffusion_hyperswap_1c_256": {
+    "n": 14,
+    "recall": 0.0
+   },
+   "ffusion_inswapper_128": {
+    "n": 40,
+    "recall": 0.0
+   },
+   "ffusion_real": {
+    "n": 64,
+    "acc": 1.0
+   },
+   "hq_clip_alphaface_256": {
+    "n": 32,
+    "recall": 0.21875
+   },
+   "hq_clip_hyperswap_1a_256": {
+    "n": 40,
+    "recall": 0.225
+   },
+   "hq_clip_hyperswap_1b_256": {
+    "n": 32,
+    "recall": 0.03125
+   },
+   "hq_clip_hyperswap_1c_256": {
+    "n": 64,
+    "recall": 0.203125
+   },
+   "hq_clip_inswapper_128": {
+    "n": 32,
+    "recall": 0.125
+   },
+   "hq_clip_real": {
+    "n": 191,
+    "acc": 0.9267015706806283
+   },
+   "hq_raw_alphaface_256": {
+    "n": 9,
+    "recall": 0.0
+   },
+   "hq_raw_hyperswap_1a_256": {
+    "n": 59,
+    "recall": 0.06779661016949153
+   },
+   "hq_raw_hyperswap_1b_256": {
+    "n": 24,
+    "recall": 0.041666666666666664
+   },
+   "hq_raw_hyperswap_1c_256": {
+    "n": 56,
+    "recall": 0.08928571428571429
+   },
+   "hq_raw_inswapper_128": {
+    "n": 24,
+    "recall": 0.16666666666666666
+   },
+   "hq_raw_real": {
+    "n": 135,
+    "acc": 0.9259259259259259
+   },
+   "keling": {
+    "n": 88,
+    "recall": 0.09090909090909091
+   },
+   "kling": {
+    "n": 24,
+    "recall": 0.16666666666666666
+   },
+   "rp_alpha": {
+    "n": 12,
+    "recall": 0.5833333333333334
+   },
+   "rp_hunyuan": {
+    "n": 34,
+    "recall": 0.4117647058823529
+   },
+   "rp_pika": {
+    "n": 49,
+    "recall": 0.061224489795918366
+   },
+   "rp_pika2.2": {
+    "n": 31,
+    "recall": 0.06451612903225806
+   },
+   "rp_ray2": {
+    "n": 38,
+    "recall": 0.23684210526315788
+   },
+   "rp_sora": {
+    "n": 37,
+    "recall": 0.1891891891891892
+   },
+   "rp_veo2": {
+    "n": 41,
+    "recall": 0.1951219512195122
+   },
+   "rp_veo3": {
+    "n": 25,
+    "recall": 0.44
+   },
+   "rp_wan2.1": {
+    "n": 11,
+    "recall": 0.5454545454545454
+   },
+   "sora1": {
+    "n": 3,
+    "recall": 0.0
+   },
+   "sora2": {
+    "n": 8,
+    "recall": 0.25
+   },
+   "thb_aniportraitaudio": {
+    "n": 160,
+    "recall": 0.05
+   },
+   "thb_aniportraitvideo": {
+    "n": 160,
+    "recall": 0.03125
+   },
+   "thb_emoportrait": {
+    "n": 160,
+    "recall": 0.125
+   },
+   "thb_hallo": {
+    "n": 160,
+    "recall": 0.0375
+   },
+   "thb_hallo2": {
+    "n": 160,
+    "recall": 0.15
+   },
+   "thb_liveportrait": {
+    "n": 146,
+    "recall": 0.15753424657534246
+   },
+   "veo3": {
+    "n": 90,
+    "recall": 0.24444444444444444
+   },
+   "wan2": {
+    "n": 10,
+    "recall": 0.2
+   }
+  },
+  "video_real_frame_acc": 0.8819169960474308,
+  "video_fake_frame_recall": 0.19904506117576842,
+  "gan_k140_fake": 0.7941176470588235,
+  "gan_k140_real": 0.9720930232558139,
+  "gan_sg2face": 0.9941860465116279,
+  "gan_sg3": 0.973404255319149,
+  "gan_tpdne": 0.8680555555555556,
+  "openai_recall": 0.985,
+  "photo_real_acc": 0.9696666666666667,
+  "photo_real_acc_by_source": {
+   "easyportrait": 0.998,
+   "ffhq": 0.964,
+   "flickr30k": 0.984,
+   "pexels": 0.984,
+   "ppr10k": 0.998,
+   "wiki": 0.89
+  },
+  "dff_fake_recall": 0.7753333333333333
+ },
+ "after": {
+  "video_frames": {
+   "celebv_clips": {
+    "n": 982,
+    "acc": 0.8268839103869654
+   },
+   "celebv_raw": {
+    "n": 79,
+    "acc": 0.7468354430379747
+   },
+   "df40_heygen": {
+    "n": 104,
+    "recall": 0.7788461538461539
+   },
+   "df40_inswap": {
+    "n": 152,
+    "recall": 0.8618421052631579
+   },
+   "df40_simswap": {
+    "n": 216,
+    "recall": 0.8842592592592593
+   },
+   "df40_uniface": {
+    "n": 192,
+    "recall": 0.8489583333333334
+   },
+   "ffpp_deepfakes": {
+    "n": 96,
+    "recall": 0.8020833333333334
+   },
+   "ffpp_face2face": {
+    "n": 72,
+    "recall": 0.5833333333333334
+   },
+   "ffpp_faceshifter": {
+    "n": 112,
+    "recall": 0.875
+   },
+   "ffpp_faceswap": {
+    "n": 96,
+    "recall": 0.5625
+   },
+   "ffpp_neuraltextures": {
+    "n": 96,
+    "recall": 0.5833333333333334
+   },
+   "ffpp_real": {
+    "n": 432,
+    "acc": 0.5
+   },
+   "ffusion2_alphaface_256": {
+    "n": 66,
+    "recall": 0.6818181818181818
+   },
+   "ffusion2_hyperswap_1a_256": {
+    "n": 64,
+    "recall": 0.578125
+   },
+   "ffusion2_hyperswap_1b_256": {
+    "n": 38,
+    "recall": 0.6842105263157895
+   },
+   "ffusion2_hyperswap_1c_256": {
+    "n": 67,
+    "recall": 0.5671641791044776
+   },
+   "ffusion2_inswapper_128": {
+    "n": 35,
+    "recall": 0.5714285714285714
+   },
+   "ffusion2_real": {
+    "n": 141,
+    "acc": 0.723404255319149
+   },
+   "ffusion_alphaface_256": {
+    "n": 32,
+    "recall": 0.96875
+   },
+   "ffusion_hyperswap_1a_256": {
+    "n": 24,
+    "recall": 0.9166666666666666
+   },
+   "ffusion_hyperswap_1b_256": {
+    "n": 16,
+    "recall": 0.625
+   },
+   "ffusion_hyperswap_1c_256": {
+    "n": 14,
+    "recall": 1.0
+   },
+   "ffusion_inswapper_128": {
+    "n": 40,
+    "recall": 0.8
+   },
+   "ffusion_real": {
+    "n": 64,
+    "acc": 0.859375
+   },
+   "hq_clip_alphaface_256": {
+    "n": 32,
+    "recall": 0.875
+   },
+   "hq_clip_hyperswap_1a_256": {
+    "n": 40,
+    "recall": 1.0
+   },
+   "hq_clip_hyperswap_1b_256": {
+    "n": 32,
+    "recall": 0.84375
+   },
+   "hq_clip_hyperswap_1c_256": {
+    "n": 64,
+    "recall": 0.734375
+   },
+   "hq_clip_inswapper_128": {
+    "n": 32,
+    "recall": 0.75
+   },
+   "hq_clip_real": {
+    "n": 191,
+    "acc": 0.8586387434554974
+   },
+   "hq_raw_alphaface_256": {
+    "n": 9,
+    "recall": 0.8888888888888888
+   },
+   "hq_raw_hyperswap_1a_256": {
+    "n": 59,
+    "recall": 0.6779661016949152
+   },
+   "hq_raw_hyperswap_1b_256": {
+    "n": 24,
+    "recall": 0.7916666666666666
+   },
+   "hq_raw_hyperswap_1c_256": {
+    "n": 56,
+    "recall": 0.5714285714285714
+   },
+   "hq_raw_inswapper_128": {
+    "n": 24,
+    "recall": 0.16666666666666666
+   },
+   "hq_raw_real": {
+    "n": 135,
+    "acc": 0.7703703703703704
+   },
+   "keling": {
+    "n": 88,
+    "recall": 0.48863636363636365
+   },
+   "kling": {
+    "n": 24,
+    "recall": 0.7916666666666666
+   },
+   "rp_alpha": {
+    "n": 12,
+    "recall": 1.0
+   },
+   "rp_hunyuan": {
+    "n": 34,
+    "recall": 1.0
+   },
+   "rp_pika": {
+    "n": 49,
+    "recall": 0.9591836734693877
+   },
+   "rp_pika2.2": {
+    "n": 31,
+    "recall": 0.5483870967741935
+   },
+   "rp_ray2": {
+    "n": 38,
+    "recall": 0.7631578947368421
+   },
+   "rp_sora": {
+    "n": 37,
+    "recall": 0.972972972972973
+   },
+   "rp_veo2": {
+    "n": 41,
+    "recall": 0.975609756097561
+   },
+   "rp_veo3": {
+    "n": 25,
+    "recall": 1.0
+   },
+   "rp_wan2.1": {
+    "n": 11,
+    "recall": 1.0
+   },
+   "sora1": {
+    "n": 3,
+    "recall": 0.0
+   },
+   "sora2": {
+    "n": 8,
+    "recall": 0.25
+   },
+   "thb_aniportraitaudio": {
+    "n": 160,
+    "recall": 0.26875
+   },
+   "thb_aniportraitvideo": {
+    "n": 160,
+    "recall": 0.3125
+   },
+   "thb_emoportrait": {
+    "n": 160,
+    "recall": 0.86875
+   },
+   "thb_hallo": {
+    "n": 160,
+    "recall": 0.375
+   },
+   "thb_hallo2": {
+    "n": 160,
+    "recall": 0.525
+   },
+   "thb_liveportrait": {
+    "n": 146,
+    "recall": 0.3493150684931507
+   },
+   "veo3": {
+    "n": 90,
+    "recall": 0.9444444444444444
+   },
+   "wan2": {
+    "n": 10,
+    "recall": 0.9
+   }
+  },
+  "video_real_frame_acc": 0.7470355731225297,
+  "video_fake_frame_recall": 0.678304983586989,
+  "gan_k140_fake": 0.8235294117647058,
+  "gan_k140_real": 0.958139534883721,
+  "gan_sg2face": 0.9883720930232558,
+  "gan_sg3": 0.9680851063829787,
+  "gan_tpdne": 0.8715277777777778,
+  "openai_recall": 0.98,
+  "photo_real_acc": 0.927,
+  "photo_real_acc_by_source": {
+   "easyportrait": 0.974,
+   "ffhq": 0.94,
+   "flickr30k": 0.958,
+   "pexels": 0.964,
+   "ppr10k": 0.996,
+   "wiki": 0.73
+  },
+  "dff_fake_recall": 0.8226666666666667
+ }
+}

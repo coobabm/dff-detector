@@ -2,15 +2,17 @@
 
   uv run app.py   ->  http://127.0.0.1:7860
 
-"Detect" tab: one upload box for images and videos, routed to specialist models:
-  image -> all_image (AI images incl. StyleGAN; falls back to all_openai) + Grad-CAM
-  video -> AI-video detector runs_aivid/b4 + face-swap detector runs_swap/b4
-           (both EfficientNet-B4 on tight 380 px face crops; all_video as fallback)
-  Fake if any detector is above its threshold; the breakdown says which kind.
-"Pick a model" tab: run any trained image model by hand.
+"Detect" tab: images -> best image model; videos -> AI-video v4 + face swap. Per-model scores and thresholds.
+Disagreements and failures are explicit. Below-threshold scores do not prove authenticity.
+"Pick a model" tab: run one B0 detector with Grad-CAM.
 """
 import html
 import json
+import logging
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from queue import Queue
 from functools import lru_cache
 from pathlib import Path
 
@@ -36,8 +38,8 @@ AIVID_CKPT = ROOT / "runs_aivid" / "b4" / "model.pt"
 
 
 def image_model():
-    """Best image model available: all_image (AI images + StyleGAN), else all_openai."""
-    for name in ("all_image", "all_openai"):
+    """Best image model available: all_shot (+ AI-video screenshots), all_image (AI images + StyleGAN), all_openai."""
+    for name in ("all_shot", "all_image", "all_openai"):
         if (RUNS / name / "model.pt").exists():
             return name
     return (run_names() or [None])[0]
@@ -156,7 +158,7 @@ STATUS = {"zh": {"fake": "可疑", "real": "正常"}, "en": {"fake": "Suspicious
 
 
 def report(kind, verdict, detail="", rows=None, t=None, note=""):
-    """Verdict strip. kind: fake | real | empty | error. Left: status + verdict; right: per-detector evidence."""
+    """Verdict strip. kind: fake | real | empty | error | loading. Left: status + verdict; right: per-detector evidence."""
     status = ""
     if kind in ("fake", "real") and t is not None:
         code = next(c for c, v in TXT.items() if v is t)
@@ -167,11 +169,15 @@ def report(kind, verdict, detail="", rows=None, t=None, note=""):
     body += '</div><div class="evidence">'
     if rows:
         body += (f'<table class="dets"><thead><tr><th>{esc(t["c_det"])}</th><th>{esc(t["c_score"])}</th>'
-                 f'<th class="num">{esc(t["c_thr"])}</th><th class="num">{esc(t["c_frames"])}</th></tr></thead><tbody>')
+                 f'<th class="num">{esc(t["c_thr"])}</th><th class="num">{esc(t["c_frames"])}</th><th>{esc(ALL_TEXT[next(c for c, v in TXT.items() if v is t)]["result"])}</th></tr></thead><tbody>')
+        lang = next(c for c, v in TXT.items() if v is t)
         for name, p, thr, n in rows:
+            if p is None:
+                body += f'<tr><td>{esc(name)}</td><td>—</td><td>—</td><td>0</td><td>{esc(ALL_TEXT[lang]["incomplete"])}</td></tr>'
+                continue
             body += (f'<tr class="{"fake" if p > thr else "real"}"><td>{esc(name)}</td>'
                      f'<td>{meter(p, thr)}<span class="score">{p:.2f}</span></td>'
-                     f'<td class="num">{thr:.2f}</td><td class="num">{n}</td></tr>')
+                     f'<td class="num">{thr:.3f}</td><td class="num">{n}</td><td>{esc(ALL_TEXT[lang]["above" if p > thr else "below"])}</td></tr>')
         body += "</tbody></table>"
     body += "</div>"
     if note:
@@ -184,18 +190,55 @@ def run_names():
     return sorted(p.name for p in RUNS.glob("*") if (p / "model.pt").exists())
 
 
-@lru_cache(maxsize=8)
-def load(name):
-    m = build_model(pretrained=False)
+# One lock for both caches: the preload thread and a request never load the same file twice.
+_LOAD_LOCK = threading.Lock()
+
+
+def ensemble():
+    """runs/fm_ens/ensemble.json: {"members": [...], "threshold": t} -- average of fine-tuned ViT detectors."""
+    f = RUNS / "fm_ens" / "ensemble.json"
+    if not f.exists():
+        return None
+    e = json.loads(f.read_text())
+    return e if all((RUNS / m / "model.pt").exists() for m in e["members"]) else None
+
+
+def arch_of(name):
+    """runs/<name>/arch.json for timm ViT detectors (fm_detector.py); None for the EfficientNet-B0 ones."""
+    f = RUNS / name / "arch.json"
+    return json.loads(f.read_text()) if f.exists() else None
+
+
+@lru_cache(maxsize=16)
+def image_tf(name):
+    a = arch_of(name)
+    if not a:
+        return tf
+    return T.Compose([T.Resize(a["size"]), T.CenterCrop(a["size"]), T.ToTensor(), T.Normalize(a["mean"], a["std"])])
+
+
+@lru_cache(maxsize=16)
+def _load(name):
     if name not in run_names():
         raise gr.Error("unknown model")
+    a = arch_of(name)
+    if a:
+        import timm
+
+        m = timm.create_model(a["timm"], pretrained=False, num_classes=1, img_size=a["size"])
+    else:
+        m = build_model(pretrained=False)
     m.load_state_dict(torch.load(RUNS / name / "model.pt", map_location="cpu", weights_only=True))
     return m.to(DEVICE).eval()
 
 
-@lru_cache(maxsize=2)
-def load_b4(ckpt):
-    """Tight-crop EfficientNet-B4 detector + its validation threshold, or None if not trained yet."""
+def load(name):
+    with _LOAD_LOCK:
+        return _load(name)
+
+
+@lru_cache(maxsize=16)
+def _load_b4(ckpt):
     if not Path(ckpt).exists():
         return None
     from train_swap import build as build_b4
@@ -206,10 +249,107 @@ def load_b4(ckpt):
     return m.to(DEVICE).eval(), ck["threshold"]
 
 
+def load_b4(ckpt):
+    """Tight-crop EfficientNet-B4 detector + its validation threshold, or None if not trained yet."""
+    with _LOAD_LOCK:
+        return _load_b4(ckpt)
+
+
+def load_ext(key):
+    import external_detectors
+
+    with _LOAD_LOCK:
+        return external_detectors.load(key, DEVICE)
+
+
+WARM = {"done": 0, "total": 0, "started": False}
+
+
+def preload():
+    """Load every checkpoint in the background, one by one, so the first upload does not wait for all of them."""
+    specs = model_specs()
+    WARM["total"] = len(specs)
+    for name, family, key in specs:
+        try:
+            if family == "ext":
+                load_ext(key)
+            elif family == "ens":
+                for m in ensemble()["members"]:
+                    load(m)
+            else:
+                load_b4(key) if family == "b4" else load(key)
+        except Exception:
+            logging.exception("Preload failed: %s", name)
+        WARM["done"] += 1
+    logging.info("Preloaded %d models on %s", len(specs), DEVICE)
+
+
+def start_preload():
+    if not WARM["started"]:
+        WARM["started"] = True
+        threading.Thread(target=preload, name="preload", daemon=True).start()
+
+
+def b0_threshold(name):
+    """Decision threshold of an image model: runs/<name>/threshold.json if present, else 0.5."""
+    f = RUNS / name / "threshold.json"
+    return float(json.loads(f.read_text())["threshold"]) if f.exists() else 0.5
+
+
 def square(im: Image.Image) -> Image.Image:
     w, h = im.size
     s = min(w, h)
     return im.crop(((w - s) // 2, (h - s) // 2, (w + s) // 2, (h + s) // 2)).resize((256, 256), Image.BICUBIC)
+
+
+def grad_cam(model, im, transform):
+    """Explain the fake-class logit on the exact model input, without parameter gradients."""
+    x = transform(im).unsqueeze(0).to(DEVICE)
+    if hasattr(model, "blocks") and hasattr(model, "patch_embed"):
+        # ViT: the logit reads only the CLS token after the last block, so final patch tokens get zero
+        # gradient. Explain the tokens entering the last block instead (they still feed CLS via attention).
+        store = {}
+        hook = model.blocks[-2].register_forward_hook(lambda mod, inp, out: store.__setitem__("t", out))
+        try:
+            with torch.enable_grad():
+                logit = model(x).squeeze()
+                grads, = torch.autograd.grad(logit, store["t"])
+        finally:
+            hook.remove()
+        n = getattr(model, "num_prefix_tokens", 1)
+        f, g = store["t"].detach()[:, n:], grads[:, n:]
+        side = int(round(f.shape[1] ** .5))
+        # Per-token gradient x activation (channel-averaged Grad-CAM is dominated by DINOv2's few huge channels).
+        rel = (g * f).sum(-1)
+        cam = F.relu(rel) if rel.max() > 0 else rel.abs()
+        cam = (cam / (cam.max() + 1e-30)).reshape(1, 1, side, side)  # gradients are tiny: normalize here
+        features = None
+    else:
+        with torch.no_grad():
+            features = model.forward_features(x)
+        with torch.enable_grad():
+            features = features.detach().requires_grad_(True)
+            logit = model.forward_head(features).squeeze()
+            grads, = torch.autograd.grad(logit, features)
+    score = torch.sigmoid(logit.detach()).item()
+    if features is None:
+        pass
+    else:
+        cam = F.relu((grads.mean((2, 3), keepdim=True) * features.detach()).sum(1, keepdim=True))
+    cam = F.interpolate(cam, size=x.shape[-2:], mode="bilinear", align_corners=False)[0, 0]
+    cam = cam.detach().cpu().numpy()
+    # Use the normalized tensor's actual crop as the base (B0 center crop / B4 tight crop).
+    norm = next((t for t in getattr(transform, "transforms", []) if isinstance(t, T.Normalize)), None)
+    mean, std = (norm.mean, norm.std) if norm else (MEAN, STD)
+    rgb = x[0].detach().cpu().permute(1, 2, 0).numpy() * np.asarray(std) + np.asarray(mean)
+    base = Image.fromarray((np.clip(rgb, 0, 1) * 255).round().astype(np.uint8))
+    if not np.isfinite(cam).all() or not np.isfinite(score):
+        raise ValueError("Non-finite Grad-CAM")
+    if cam.max() <= 1e-8:
+        return score, base  # no positive activation: do not invent colored evidence
+    cam /= cam.max()
+    heat = Image.fromarray((cm.jet(cam)[..., :3] * 255).astype(np.uint8))
+    return score, Image.blend(base, heat, .45)
 
 
 def analyze(img, run, lang="zh"):
@@ -218,103 +358,496 @@ def analyze(img, run, lang="zh"):
         return None, None, report("empty", "", "", t=t, note=t["empty"])
     model = load(run)
     im = square(ImageOps.exif_transpose(img).convert("RGB"))
-    x = tf(im).unsqueeze(0).to(DEVICE)
-    feats = model.forward_features(x)
-    feats.retain_grad()
-    logit = model.forward_head(feats).squeeze()
-    p = torch.sigmoid(logit).item()
-    logit.backward()
-    # Grad-CAM toward "fake".
-    w = feats.grad.mean(dim=(2, 3), keepdim=True)
-    cam = F.relu((w * feats).sum(1, keepdim=True))
-    cam = F.interpolate(cam, size=im.size[::-1], mode="bilinear")[0, 0].detach().cpu().numpy()
-    cam = cam / (cam.max() + 1e-8)
-    heat = (cm.jet(cam)[..., :3] * 255).astype(np.uint8)
-    overlay = Image.blend(im, Image.fromarray(heat), 0.45)
-    detail = f'{esc(t["p_ai"])} <strong>{p:.1%}</strong> · <code>{esc(run)}</code>' + meter(p, 0.5)
-    md = report("fake" if p > 0.5 else "real", t["v_fake_img"] if p > 0.5 else t["v_real_img"], detail,
+    p, overlay = grad_cam(model, im, image_tf(run))
+    thr = b0_threshold(run)
+    detail = f'{esc(t["p_ai"])} <strong>{p:.1%}</strong> · <code>{esc(run)}</code>' + meter(p, thr)
+    md = report("fake" if p > thr else "real", t["v_fake_img"] if p > thr else t["v_real_img"], detail,
                 t=t, note=t["note"])
     return {t["fake"]: p, t["real"]: 1 - p}, overlay, md
 
 
-@torch.no_grad()
-def analyze_video(path, lang="zh"):
-    import cv2
+ALL_TEXT = {
+    "zh": dict(sub="图片交给 AI 图片检测器；视频交给 AI 生成视频和换脸两个检测器。低分不能证明真实。",
+               mixed="模型意见不一致", flagged="模型提示可疑", low="均未超过阈值，但不能证明真实",
+               incomplete="检测不完整", missing="没有可用人脸", failed="推理失败", result="结果",
+               below="未超过阈值", above="超过阈值", count="{flagged}/{total} 个成功运行的模型超过各自阈值。",
+               note="各模型分数未统一校准，不是鉴定概率，也不作投票结论。视频分数为最多 16 个采样帧的中位数；视频专用模型用于静态图片仅供探索性参考。"),
+    "en": dict(sub="Images go to the AI-image detector; videos go to the AI-video and face-swap detectors. Low scores are not proof of authenticity.",
+               mixed="Models disagree", flagged="Models flag suspicious content", low="Below all thresholds; authenticity is not proven",
+               incomplete="Incomplete detection", missing="No usable face", failed="Inference failed", result="Result",
+               below="Below threshold", above="Above threshold", count="{flagged}/{total} successful models exceed their own thresholds.",
+               note="Scores are not jointly calibrated probabilities or a vote. Video scores are medians over up to 16 sampled frames. Video specialists on still images are exploratory only."),
+    "ko": dict(sub="이미지는 AI 이미지 탐지기로, 영상은 AI 생성 영상·얼굴 교체 탐지기로 검사합니다. 낮은 점수가 진위를 증명하지 않습니다.",
+               mixed="모델 의견 불일치", flagged="모델이 의심 신호를 감지함", low="모두 임계값 이하이나 진짜임을 증명하지 않음",
+               incomplete="불완전한 탐지", missing="사용 가능한 얼굴 없음", failed="추론 실패", result="결과",
+               below="임계값 이하", above="임계값 초과", count="성공한 모델 {total}개 중 {flagged}개가 각 임계값을 초과했습니다.",
+               note="점수는 통합 보정된 확률이나 투표 결과가 아닙니다. 영상 점수는 최대 16개 프레임의 중앙값입니다. 영상 전용 모델의 정지 이미지 결과는 탐색적 참고용입니다."),
+}
+CAM_TEXT = {
+    "zh": dict(title="多模型 Grad-CAM · 点击放大", image="当前图片", frame="采样帧",
+               score="此图分数", threshold="阈值", failed="热力图生成失败", no_frame="未找到两种裁切均可用的同一帧，未生成视频热力图。",
+               note="热力图解释各模型对 AI/篡改类别的响应，不是伪造区域证据。每张图独立归一化，红色强度不能跨模型比较；无正向响应时显示原裁切。B0/B4 输入裁切不同。视频热力图只解释标注帧，其分数不是整段视频的中位数。"),
+    "en": dict(title="Multi-model Grad-CAM · click to enlarge", image="Current image", frame="Sampled frame",
+               score="This crop score", threshold="Threshold", failed="Heatmap failed", no_frame="No shared frame with both crop types; video heatmaps unavailable.",
+               note="Maps explain each model's fake-class response, not proof of manipulated regions. Each map is independently normalized; color intensity is not comparable across models. No positive response shows the original crop. B0/B4 use different crops. Video maps explain only the labeled frame, not the video's median score."),
+    "ko": dict(title="다중 모델 Grad-CAM · 클릭하여 확대", image="현재 이미지", frame="샘플 프레임",
+               score="이 이미지 점수", threshold="임계값", failed="히트맵 생성 실패", no_frame="두 크롭에 공통으로 사용할 프레임이 없어 영상 히트맵을 생성하지 않았습니다.",
+               note="히트맵은 AI/조작 클래스에 대한 모델 반응이며 조작 영역의 증거가 아닙니다. 각 맵은 개별 정규화되어 모델 간 색 강도를 비교할 수 없습니다. 양의 반응이 없으면 원본 크롭을 표시합니다. B0/B4 크롭은 다릅니다. 영상 맵은 표시된 프레임만 설명하며 영상 중앙값 점수가 아닙니다."),
+}
+for _lang, _copy in ALL_TEXT.items():
+    TXT[_lang]["sub"] = _copy["sub"]
 
+
+# One detector per job: images, AI-generated video, face swap. Older versions stay on disk but are not run.
+B4_MODELS = (("runs_aivid/v4", "runs_aivid/b4"), ("runs_swap/b4",))
+
+
+def model_specs(kind=None):
+    """Detectors for one-click detection. kind="image": best image model only (the video models
+    flag about half of real still photos) + published detectors (external_detectors.py) on the original
+    upload; kind="video": AI-video v4 + face swap; None: everything."""
+    import external_detectors
+
+    specs = []
+    ens = ensemble()
+    image = image_model()
+    if kind != "video":
+        if ens:  # fine-tuned CLIP + DINOv2 average replaces the B0 image model
+            specs.append(("runs/fm_ens", "ens", "fm_ens"))
+        elif image:
+            specs.append((f"runs/{image}", "b0", image))
+    if kind != "video":
+        specs.extend((f"ext/{external_detectors.NAMES[k]}", "ext", k) for k in external_detectors.available() if k != "bfree")
+    for choices in B4_MODELS if kind != "image" else ():
+        name = next((n for n in choices if (ROOT / n / "model.pt").exists()), None)
+        if name:
+            specs.append((name, "b4", str(ROOT / name / "model.pt")))
+    return specs
+
+
+def score_all(loose, tight, lang, **kw):
+    rows = []
+    for rows in iter_scores(loose, tight, lang, **kw):
+        pass
+    return rows
+
+
+DETECTOR_WORKERS = 3
+
+
+def iter_scores(loose, tight, lang, *, heatmaps=None, cam_errors=None, specs=None, **kw):
+    """Three concurrent detectors; publish scores immediately, before optional heatmaps.
+
+    Workers own their output lists. Only the coordinator updates shared UI state.
+    The outer Gradio queue remains single-request so hooks/cached models are not shared
+    by concurrent requests. Cancellation drains workers before releasing that queue slot.
+    """
+    selected = list(model_specs() if specs is None else specs)
+    if not selected:
+        return
+    events = Queue()
+
+    def worker(index, spec):
+        maps, errors = [], []
+        emitted = False
+        try:
+            for result in _iter_scores_single(loose, tight, lang, specs=[spec],
+                    heatmaps=maps if heatmaps is not None else None, cam_errors=errors, **kw):
+                if result and not emitted:
+                    events.put(("row", index, result[0]))
+                    emitted = True
+        except Exception as exc:
+            logging.exception("Detector task failed: %s", spec[0])
+            if not emitted:
+                events.put(("row", index, (spec[0] + " · " + ALL_TEXT[lang]["failed"]
+                            + " (" + type(exc).__name__ + ")", None, None, 0)))
+            else:
+                errors.append(spec[0])
+        finally:
+            events.put(("done", index, (maps, errors)))
+
+    rows, done = [], 0
+    with ThreadPoolExecutor(max_workers=DETECTOR_WORKERS, thread_name_prefix="detector") as pool:
+        for index, spec in enumerate(selected):
+            pool.submit(worker, index, spec)
+        while done < len(selected):
+            kind, index, payload = events.get()
+            if kind == "row":
+                rows.append(payload)
+                yield list(rows)
+            else:
+                maps, errors = payload
+                if heatmaps is not None:
+                    heatmaps.extend(maps)
+                if cam_errors is not None:
+                    cam_errors.extend(errors)
+                done += 1
+
+
+@torch.no_grad()
+def _iter_scores_single(loose, tight, lang, *, heatmaps=None, cam_errors=None, representatives=None, frame_label="",
+                specs=None, originals=None):
+    """Run the detectors one at a time; yield the rows so far after each one.
+    b0: loose face crops, b4: tight crops, ext (published detectors): the original uploaded image(s)."""
+    from train_swap import eval_tf as b4_tf
+
+    rows = []
+    for name, family, key in specs or model_specs():
+        if family == "ext":
+            import external_detectors
+
+            try:
+                load_ext(key)
+                scores = [external_detectors.score(key, im.convert("RGB"), DEVICE) for im in originals or []]
+                if not scores:
+                    rows.append((name + " · " + ALL_TEXT[lang]["missing"], None, None, 0))
+                elif not np.isfinite(scores).all():
+                    raise ValueError("Non-finite score")
+                else:
+                    rows.append((name, float(np.median(scores)), external_detectors.THRESHOLDS[key], len(scores)))
+            except Exception as exc:
+                logging.exception("Detector failed: %s", name)
+                rows.append((name + " · " + ALL_TEXT[lang]["failed"] + " (" + type(exc).__name__ + ")", None, None, 0))
+            yield list(rows)
+            continue
+        if family == "ens":
+            try:
+                e = ensemble()
+                if not loose:
+                    rows.append((name + " · " + ALL_TEXT[lang]["missing"], None, None, 0))
+                    yield list(rows)
+                    continue
+                one = heatmaps is not None and bool(representatives) and len(loose) == 1 \
+                    and representatives.get("b0") is loose[0]
+                maps = []
+                if one:
+                    # Single image: each member's Grad-CAM pass already yields its score, so there is no
+                    # separate scoring forward (same numbers; about half the time on a CPU server).
+                    per = [[]]
+                    for m in e["members"]:
+                        try:
+                            score, overlay = grad_cam(load(m), loose[0], image_tf(m))
+                            if e.get("tta"):  # test-time augmentation: average with the mirrored crop
+                                with torch.no_grad():
+                                    flipped = image_tf(m)(ImageOps.mirror(loose[0])).unsqueeze(0).to(DEVICE)
+                                    score = (score + torch.sigmoid(load(m)(flipped)).item()) / 2
+                            maps.append((overlay, f"{m} · {frame_label} · ViT 224×224 · {CAM_TEXT[lang]['score']} {score:.3f}"))
+                        except Exception:
+                            if cam_errors is not None:
+                                cam_errors.append(m)
+                            with torch.no_grad():
+                                score = torch.sigmoid(load(m)(image_tf(m)(loose[0]).unsqueeze(0).to(DEVICE))).item()
+                        per[0].append(score)
+                else:
+                    with torch.no_grad():
+                        per = [[float(np.mean([torch.sigmoid(load(m)(image_tf(m)(v).unsqueeze(0).to(DEVICE))).item()
+                                               for v in ([im, ImageOps.mirror(im)] if e.get("tta") else [im])]))
+                                for m in e["members"]] for im in loose]
+                scores = [float(np.mean(p)) for p in per]
+                if not np.isfinite(scores).all():
+                    raise ValueError("Non-finite score")
+                rows.append((name, float(np.median(scores)), float(e["threshold"]), len(scores)))
+                if maps:
+                    heatmaps.extend(maps)
+                yield list(rows)  # score must not wait for Grad-CAM
+                if heatmaps is not None and representatives and "b0" in representatives and not one:
+                    for m in e["members"]:
+                        try:
+                            score, overlay = grad_cam(load(m), representatives["b0"], image_tf(m))
+                            words = CAM_TEXT[lang]
+                            heatmaps.append((overlay, f"{m} · {frame_label} · ViT 224×224 · {words['score']} {score:.3f}"))
+                        except Exception:
+                            if cam_errors is not None:
+                                cam_errors.append(m)
+            except Exception as exc:
+                logging.exception("Detector failed: %s", name)
+                rows.append((name + " · " + ALL_TEXT[lang]["failed"] + " (" + type(exc).__name__ + ")", None, None, 0))
+            yield list(rows)
+            continue
+        crops = tight if family == "b4" else loose
+        if not crops:
+            rows.append((name + " · " + ALL_TEXT[lang]["missing"], None, None, 0))
+            yield list(rows)
+            continue
+        try:
+            model, threshold = load_b4(key) if family == "b4" else (load(key), b0_threshold(key))
+            transform = b4_tf if family == "b4" else image_tf(key)
+            scores = [torch.sigmoid(model(transform(im).unsqueeze(0).to(DEVICE))).item() for im in crops]
+            if not np.isfinite(scores).all() or not np.isfinite(threshold):
+                raise ValueError("Non-finite score or threshold")
+            rows.append((name, float(np.median(scores)), float(threshold), len(scores)))
+            yield list(rows)  # score must not wait for Grad-CAM
+            if heatmaps is not None and representatives and family in representatives:
+                try:
+                    score, overlay = grad_cam(model, representatives[family], transform)
+                    words = CAM_TEXT[lang]
+                    crop_label = "B4 tight 380×380" if family == "b4" else ("ViT 224×224" if arch_of(key) else "B0 224×224")
+                    caption = (f"{name} · {frame_label} · {crop_label} · "
+                               f"{words['score']} {score:.3f} · {words['threshold']} {threshold:.3f}")
+                    heatmaps.append((overlay, caption))
+                except Exception:
+                    if cam_errors is not None:
+                        cam_errors.append(name)
+
+        except Exception as exc:
+            # A broken checkpoint must not hide the other detectors or become a 'real' vote.
+            logging.exception("Detector failed: %s", name)
+            rows.append((name + " · " + ALL_TEXT[lang]["failed"] + " (" + type(exc).__name__ + ")", None, None, 0))
+        yield list(rows)
+
+
+TRAINING_TYPES = {
+    "runs/t2i": ("AI 文生图（SD 类）", "AI text-to-image (SD family)", "AI 텍스트 이미지 생성(SD 계열)"),
+    "runs/inpaint": ("AI 局部重绘", "AI inpainting", "AI 인페인팅"),
+    "runs/insight": ("AI 换脸", "AI face swapping", "AI 얼굴 교체"),
+    "runs/all": ("混合类型 AI 生图／人脸篡改", "mixed AI image generation / face manipulation", "혼합 유형 AI 이미지 생성 / 얼굴 조작"),
+    "runs/all_openai": ("混合类型 AI 生图／篡改（含 OpenAI 生图训练样本）", "mixed AI generation / manipulation (trained with OpenAI image samples)", "혼합 유형 AI 생성 / 조작(OpenAI 이미지 학습 샘플 포함)"),
+    "runs/all_image": ("混合类型 AI 生图／篡改（含 GAN）", "mixed AI image generation / manipulation (including GANs)", "혼합 유형 AI 이미지 생성 / 조작(GAN 포함)"),
+    "runs/fm_ens": ("AI 生成／篡改人脸（含新一代生成器，CLIP+DINOv2）", "AI-generated / manipulated face (incl. newest generators, CLIP+DINOv2)", "AI 생성 / 조작 얼굴(최신 생성기 포함, CLIP+DINOv2)"),
+    "runs/all_shot": ("混合类型 AI 生图／篡改（含 GAN、AI 视频截图）", "mixed AI image generation / manipulation (including GANs and AI-video screenshots)", "혼합 유형 AI 이미지 생성 / 조작(GAN, AI 영상 캡처 포함)"),
+    "runs/all_video": ("混合类型 AI 图片／视频生成或篡改", "mixed AI image / video generation or manipulation", "혼합 유형 AI 이미지 / 영상 생성 또는 조작"),
+    "runs_swap": ("AI 换脸", "AI face swapping", "AI 얼굴 교체"),
+    "ext": ("AI 生成图像（外部公开模型）", "AI-generated image (published detector)", "AI 생성 이미지(공개 탐지 모델)"),
+    "runs_aivid": ("AI 视频生成／人像驱动", "AI video generation / portrait animation", "AI 영상 생성 / 인물 애니메이션"),
+}
+HINT_TEXT = {
+    "zh": dict(prefix="疑似 {kind}", source="最高分模型（并列时全部列出）：{models}；分数 {score:.4f} > 0.9。",
+               note="类型提示仅按最高分模型的训练范围生成，不是来源识别；不能据此确定具体生成工具，分数也不代表真实性概率。",
+               unknown="AI 生成／篡改（训练类型未标注）"),
+    "en": dict(prefix="Suspected {kind}", source="Highest-scoring model(s), including ties: {models}; score {score:.4f} > 0.9.",
+               note="Type hints reflect the highest-scoring model's training scope, not provenance identification. They cannot identify the generating tool; scores are not authenticity probabilities.",
+               unknown="AI generation / manipulation (training type unspecified)"),
+    "ko": dict(prefix="{kind} 의심", source="최고 점수 모델(동점 포함): {models}; 점수 {score:.4f} > 0.9.",
+               note="유형 안내는 최고 점수 모델의 학습 범위에 기반하며 출처 식별이 아닙니다. 실제 생성 도구를 확정할 수 없고 점수는 진위 확률이 아닙니다.",
+               unknown="AI 생성 / 조작(학습 유형 미지정)"),
+}
+
+
+def training_hint(valid, lang):
+    """UI heuristic only: never attribute a binary detector's score to a specific tool."""
+    if not valid:
+        return None
+    best = max(r[1] for r in valid)
+    if best <= .9:
+        return None
+    winners = [r for r in valid if r[1] == best]
+    index = {"zh": 0, "en": 1, "ko": 2}[lang]
+    text = HINT_TEXT[lang]
+    kinds = []
+    for name, *_ in winners:
+        labels = TRAINING_TYPES.get(name) or TRAINING_TYPES.get(name.split("/", 1)[0])
+        kind = labels[index] if labels else text["unknown"]
+        if kind not in kinds:
+            kinds.append(kind)
+    return (text["prefix"].format(kind=" / ".join(kinds)),
+            text["source"].format(models=", ".join(r[0] for r in winners), score=best))
+
+
+RATE_TEXT = {
+    "zh": dict(rate="AI 率 {r}（组合模型，按真假各半估计）。", label="AI 率", sub="组合模型，按真假各半估计",
+               note="AI 率由组合模型分数在留出数据上校准得到（保序回归，假设送检图片真假各半）；"
+                    "如果平时 AI 图更少，实际 AI 率会更低。判定仍以阈值为准。"),
+    "en": dict(rate="AI rate {r} (ensemble, assuming half of images are AI). ", label="AI rate",
+               sub="ensemble, assuming half of images are AI",
+               note="The AI rate is the ensemble score calibrated on held-out data (isotonic regression, 50/50 prior); "
+                    "if AI images are rarer among your uploads, the true rate is lower. The verdict still uses the threshold."),
+    "ko": dict(rate="AI 확률 {r} (조합 모델, 진짜·AI 반반 가정). ", label="AI 확률", sub="조합 모델, 진짜·AI 반반 가정",
+               note="AI 확률은 조합 모델 점수를 보류 데이터로 보정한 값입니다(등위 회귀, 반반 사전확률). "
+                    "실제로 AI 이미지가 더 드물면 실제 확률은 더 낮습니다. 판정은 여전히 임계값 기준입니다."),
+}
+
+
+@lru_cache(maxsize=1)
+def calibration():
+    f = RUNS / "fm_ens" / "calibration.json"
+    if not f.exists():
+        return None
+    c = json.loads(f.read_text())
+    e = ensemble()
+    return c if e and c.get("members") == e["members"] else None  # stale curve for other members: do not use
+
+
+def ai_rate(score):
+    c = calibration()
+    return None if c is None else float(np.interp(score, c["x"], c["y"]))
+
+
+def all_report(rows, lang, cam_errors=None, extra_note=""):
+    text = ALL_TEXT[lang]
+    valid = [r for r in rows if r[1] is not None]
+    flagged = [r for r in valid if r[1] > r[2]]
+    verdict = text["mixed"] if flagged and len(flagged) < len(valid) else text["flagged"] if flagged else text["low"]
+    hint = training_hint(valid, lang)
+    detail = text["count"].format(flagged=len(flagged), total=len(valid))
+    ens_row = next((r for r in valid if r[0] == "runs/fm_ens"), None)
+    rate = ai_rate(ens_row[1]) if ens_row else None
+    if rate is not None:
+        extra_note = RATE_TEXT[lang]["note"] + " " + extra_note
+    if hint:
+        detail = hint[1] + " " + verdict + "。 " + detail
+        verdict = hint[0]
+    rate_html = ""
+    if rate is not None:
+        shown = ">99%" if rate >= .995 else "<1%" if rate < .005 else f"≈ {rate:.0%}"  # never claim certainty
+        t = RATE_TEXT[lang]
+        level = min(4, int(rate * 5))  # 5 colour steps, green -> amber -> red (inline styles are stripped by Gradio)
+        rate_html = (f'<span class="airate r{level}">'
+                     f'<span class="airate-label">{esc(t["label"])}</span><b>{esc(shown)}</b>'
+                     f'<small>{esc(t["sub"])}</small></span>')
+    if len(valid) < len(rows) or not valid:
+        verdict = text["incomplete"] + (" · " + verdict if valid else "")
+    note = HINT_TEXT[lang]["note"] + " " + text["note"] + " " + CAM_TEXT[lang]["note"] + " " + extra_note
+    if cam_errors:
+        note += " " + CAM_TEXT[lang]["failed"] + ": " + ", ".join(cam_errors)
+    return report("fake" if flagged or hint else "empty", verdict,
+                  rate_html + esc(detail), rows, TXT[lang], note)
+
+
+STREAM_TEXT = {
+    "zh": dict(read="正在找人脸", frames="正在抽帧找人脸", found="已看 {seen} 帧，{faces} 帧有人脸",
+               run="最多 3 个检测器并行运行", done="已完成 {done}/{total}", next="进行中：{name}",
+               cold="首次启动，模型还在载入（{done}/{total}），会慢一些。", wait="每个模型跑完就会出现在右边。"),
+    "en": dict(read="Looking for a face", frames="Sampling frames for faces", found="{seen} frames checked, {faces} with a face",
+               run="Running up to 3 detectors in parallel", done="{done}/{total} done", next="In progress: {name}",
+               cold="Models are still loading after startup ({done}/{total}); this run is slower.",
+               wait="Each model's row appears on the right as soon as it finishes."),
+    "ko": dict(read="얼굴을 찾는 중", frames="프레임에서 얼굴을 찾는 중", found="{seen}프레임 확인, 얼굴 {faces}프레임",
+               run="최대 3개 탐지기 병렬 실행 중", done="{done}/{total} 완료", next="진행 중: {name}",
+               cold="서버 시작 직후라 모델을 불러오는 중입니다 ({done}/{total}). 조금 느릴 수 있습니다.",
+               wait="모델이 끝날 때마다 오른쪽에 결과가 한 줄씩 나타납니다."),
+}
+
+
+def progress(lang, step, rows=None, done=0, total=0, next_name="", extra=""):
+    """Interim report while a run is streaming: step title, progress bar, rows finished so far."""
+    words = STREAM_TEXT[lang]
+    parts = [esc(extra)] if extra else []
+    if total:
+        parts.append(esc(words["done"].format(done=done, total=total))
+                     + (" · " + esc(words["next"].format(name=next_name)) if next_name else ""))
+    detail = " ".join(parts)
+    if total:
+        detail += f'<span class="meter progress"><i style="width:{done / total * 100:.1f}%"></i></span>'
+    note = words["wait"]
+    if WARM["started"] and WARM["done"] < WARM["total"]:
+        note = words["cold"].format(done=WARM["done"], total=WARM["total"]) + " " + note
+    html_ = report("loading", step, detail, rows or None, TXT[lang], note)
+    if rows:  # mark the newest row so it fades in instead of the table appearing all at once
+        head, sep, tail = html_.rpartition("<tr")
+        html_ = head + sep + " data-new" + tail
+    return html_.replace('class="report loading single"', 'class="report loading"') if total else html_
+
+
+PACE = 0  # no artificial presentation delay
+
+
+def stream_scores(loose, tight, lang, kind=None, pace=PACE, **kw):
+    """iter_scores + one interim report per finished model. The last yielded rows are the final rows."""
+    specs = model_specs(kind)
+    names = [s[0] for s in specs]
+    yield progress(lang, STREAM_TEXT[lang]["run"], [], 0, len(specs), ", ".join(names)), []
+    shown = time.monotonic()
+    for rows in iter_scores(loose, tight, lang, specs=specs, **kw):
+        if pace > 0:
+            time.sleep(max(0.0, pace - (time.monotonic() - shown)))
+        done = len(rows)
+        completed = {r[0].split(" · ", 1)[0] for r in rows}
+        nxt = ", ".join(n for n in names if n not in completed)
+        yield progress(lang, STREAM_TEXT[lang]["run"], rows, done, len(specs), nxt), rows
+        shown = time.monotonic()
+    if pace > 0:
+        time.sleep(pace)
+
+
+def last(steps):
+    out = None
+    for out in steps:
+        pass
+    return out
+
+
+def analyze_all_image(img, lang):
+    return last(stream_all_image(img, lang))
+
+
+def analyze_video(path, lang="zh"):
+    return last(stream_video(path, lang))
+
+
+def face_crop(img):
+    """Largest face as the loose crop the image models were trained on (DFF style, same as video frames);
+    the centre square when no face is found (already-cropped portraits, tiny faces)."""
+    import cv2
+    from video_scan import faces_in
+
+    faces = faces_in(cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR))
+    if not faces:
+        return square(img)
+    box, crop = max(faces, key=lambda r: r[0][2] * r[0][3])
+    # Crop only when it helps: the face is small in the frame (video screenshot, group shot) AND the crop
+    # keeps real detail. Re-cropping framed portraits or blowing up tiny faces (blur) raises false alarms.
+    side = 2.2 * max(box[2], box[3])  # faces_in crop size in original pixels
+    return crop if box[2] < 0.3 * min(img.size) and side >= 224 else square(img)
+
+
+def stream_all_image(img, lang):
+    yield None, None, progress(lang, STREAM_TEXT[lang]["read"]), []
+    img = ImageOps.exif_transpose(img).convert("RGB")
+    loose = face_crop(img)
+    tight = []  # images only run the B0 image model (see model_specs)
+    heatmaps, errors = [], []
+    reps = {"b0": loose}
+    rows = []
+    for md, rows in stream_scores([loose], tight, lang, "image", heatmaps=heatmaps, cam_errors=errors,
+                                  representatives=reps, frame_label=CAM_TEXT[lang]["image"], originals=[img]):
+        yield None, None, md, []
+    yield None, heatmaps, all_report(rows, lang, errors), []
+
+
+def stream_video(path, lang="zh"):
+    import cv2
     from extract_tight import tight_crop, video_frames
     from video_scan import faces_in
 
-    t = TXT[lang]
-    frames = video_frames(path, 16)
-    rows, gallery = [], []
+    loose, tight, gallery = [], [], []
+    reps, frame_label = {}, ""
+    words = STREAM_TEXT[lang]
+    yield None, None, progress(lang, words["frames"]), []
+    for seen, (index, frame) in enumerate(video_frames(path, 16), 1):
+        faces = faces_in(frame)
+        if faces:
+            crop = max(faces, key=lambda r: r[0][2] * r[0][3])[1]
+            loose.append(crop)
+            gallery.append((crop, str(index)))
+        crop = tight_crop(frame)
+        if crop is not None:
+            tight.append(Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)))
+            if faces and not reps:
+                reps = {"b0": loose[-1], "b4": tight[-1]}
+                frame_label = f"{CAM_TEXT[lang]['frame']} #{index}"
+        yield None, None, progress(lang, words["frames"], extra=words["found"].format(seen=seen, faces=len(loose))), list(gallery)
+    heatmaps, errors = [], []
+    rows = []
+    for md, rows in stream_scores(loose, tight, lang, "video", heatmaps=heatmaps, cam_errors=errors,
+                                  representatives=reps, frame_label=frame_label):
+        yield None, None, md, gallery
+    extra = "" if reps else CAM_TEXT[lang]["no_frame"]
+    yield None, heatmaps, all_report(rows, lang, errors, extra), gallery
 
-    tight = None  # tight 380 px face crops, shared by both B4 detectors
 
-    def b4_scores(det, cap):
-        nonlocal tight
-        from train_swap import eval_tf as b4_tf
-
-        if tight is None:
-            tight = []
-            for _, f in frames:
-                c = tight_crop(f)
-                if c is not None:
-                    tight.append(Image.fromarray(cv2.cvtColor(c, cv2.COLOR_BGR2RGB)))
-        m, thr = det
-        ps = []
-        for im in tight:
-            p = torch.sigmoid(m(b4_tf(im).unsqueeze(0).to(DEVICE))).item()
-            ps.append(p)
-            if len(ps) % 3 == 1:
-                gallery.append((im, f"{cap} {p:.2f}"))
-        return ps, thr
-
-    # 1) AI-generated video: B4 on tight crops if trained, else the loose-crop image-style model.
-    aivid = load_b4(str(AIVID_CKPT))
-    if aivid:
-        ps, thr = b4_scores(aivid, t["cap_aivid"])
-        if ps:
-            rows.append((t["det_aivid"], float(np.median(ps)), thr, len(ps)))
-    elif VIDEO_MODEL in run_names():
-        m, ps = load(VIDEO_MODEL), []
-        for _, f in frames:
-            faces = faces_in(f)
-            if faces:
-                crop = max(faces, key=lambda r: r[0][2] * r[0][3])[1]
-                p = torch.sigmoid(m(tf(crop).unsqueeze(0).to(DEVICE))).item()
-                ps.append(p)
-                if len(ps) % 2:
-                    gallery.append((crop, f"{t['cap_aivid']} {p:.2f}"))
-        if ps:
-            rows.append((t["det_aivid"], float(np.median(ps)), 0.5, len(ps)))
-
-    # 2) Face swap: B4 on tight crops.
-    swap = load_b4(str(SWAP_CKPT))
-    if swap:
-        ps, thr = b4_scores(swap, t["cap_swap"])
-        if ps:
-            rows.append((t["det_swap"], float(np.median(ps)), thr, len(ps)))
-
-    if not rows:
-        head, _, rest = t["no_face"].partition("\n\n")
-        return None, None, report("error", bare(head), esc(rest), t=t), []
-    flagged = [r for r in rows if r[1] > r[2]]
-    if flagged:
-        head, _, kind_line = t["v_fake"].partition("\n\n")
-        kind = max(flagged, key=lambda r: r[1] - r[2])[0]
-        verdict, detail = bare(head), esc(kind_line.replace("**{k}**", "")) + f"<strong>{esc(kind)}</strong>"
-    else:
-        verdict, detail = bare(t["v_real"]), ""
-    note = t["foot"] + ("" if swap else " " + t["no_swap"])
-    top = max(rows, key=lambda r: r[1] - r[2])
-    md = report("fake" if flagged else "real", verdict, detail, rows, t, note)
-    return {t["susp"]: top[1], t["ok"]: 1 - top[1]}, None, md, gallery
+def ui_step(lbl, cam, md, gal):
+    """Show the heatmap for images and the face-frame strip for videos, hide empty panels."""
+    return lbl, gr.update(value=cam or None, visible=bool(cam)), md, gr.update(value=gal or None, visible=bool(gal))
 
 
 def analyze_any_ui(file, lang_name="中文"):
-    """UI wrapper: show the heatmap for images and the face-frame strip for videos, hide empty panels."""
-    lbl, cam, md, gal = analyze_any(file, lang_name)
-    return lbl, gr.update(value=cam, visible=cam is not None), md, gr.update(value=gal or None, visible=bool(gal))
+    return ui_step(*analyze_any(file, lang_name))
+
+
+def analyze_any_stream(file, lang_name="中文"):
+    """Streaming UI handler: the report fills in while frames are read and each model finishes."""
+    for step in stream_any(file, lang_name):
+        yield ui_step(*step)
 
 
 def analyze_pick_ui(img, run, lang_name="中文"):
@@ -323,19 +856,26 @@ def analyze_pick_ui(img, run, lang_name="中文"):
 
 
 def analyze_any(file, lang_name="中文"):
+    return last(stream_any(file, lang_name))
+
+
+def stream_any(file, lang_name="中文"):
     lang = LANGS.get(lang_name, "zh")
     if file is None:
-        return None, None, report("empty", "", "", t=TXT[lang], note=TXT[lang]["empty"]), []
+        yield None, None, report("empty", "", "", t=TXT[lang], note=TXT[lang]["empty"]), []
+        return
     path = Path(file)
     if path.suffix.lower() in VIDEO_EXT:
-        return analyze_video(str(path), lang)
+        yield from stream_video(str(path), lang)
+        return
     try:
         img = Image.open(path)
     except Exception:
         head, _, rest = TXT[lang]["bad_file"].partition("\n\n")
-        return None, None, report("error", bare(head), esc(rest), t=TXT[lang]), []
-    lbl, cam, md = analyze(img, image_model(), lang)
-    return lbl, cam, md, []
+        yield None, None, report("error", bare(head), esc(rest), t=TXT[lang]), []
+        return
+    with img:
+        yield from stream_all_image(img, lang)
 
 
 def analyze_pick(img, run, lang_name="中文"):
@@ -362,7 +902,79 @@ def results_table(lang="zh"):
         return t["no_res"]
     head = t["tbl_head"].format(cols=" | ".join(t["gens"][s] + " AUC / Acc" for s in FAKES)) + "\n"
     head += "|---" * (3 + len(FAKES)) + "|\n"
-    return head + "\n".join(rows) + "\n\n" + t["tbl_foot"]
+    return head + "\n".join(rows) + "\n\n" + t["tbl_foot"] + arms_race_table(lang)
+
+
+ARMS = {
+    "zh": dict(title="### 全部模型 × 留出测试集（2026-10）", real="真人判对", fake="AI 检出", set="测试集",
+               note="所有模型用同一个工作点：阈值取各自在一半留出真照片上的 97 分位（其余数字在另一半和其它集合上）。"
+                    "真人行 = 判为真的比例（越高越少冤枉），AI 行 = 检出比例。粗体为该行最高。"
+                    "“没见过”= 该模型训练时没有这种生成器。外部公开模型较慢，每个集合只抽 {cap} 张。",
+               unseen="（所有模型都没见过）"),
+    "en": dict(title="### All models × held-out sets (2026-10)", real="real judged real", fake="AI caught", set="Test set",
+               note="Same operating point for every model: threshold = its 97th percentile on half of the held-out real photos "
+                    "(numbers on the other half and on all other sets). Real rows = share judged real (higher = fewer false alarms); "
+                    "AI rows = share caught. Bold = best in the row. Published detectors are slow: {cap} images per set.",
+               unseen=" (unseen by every model)"),
+    "ko": dict(title="### 전체 모델 × 보류 테스트 세트 (2026-10)", real="진짜로 판정", fake="AI 검출", set="테스트 세트",
+               note="모든 모델을 같은 기준으로 비교: 보류한 실제 사진 절반에서 각 모델 점수의 97 백분위를 임계값으로 사용 "
+                    "(수치는 나머지 절반과 다른 세트). 실제 행 = 진짜로 판정한 비율(높을수록 오탐 적음), AI 행 = 검출 비율. "
+                    "굵게 = 행 최고. 공개 탐지기는 느려서 세트당 {cap}장만 사용.",
+               unseen=" (모든 모델이 처음 봄)"),
+}
+SET_NAMES = {  # zh, en, ko
+    "photo_real": ("真照片（6 个来源）", "real photos (6 sources)", "실제 사진(6개 출처)"),
+    "video_real_frames": ("真视频截图", "real video frames", "실제 영상 프레임"),
+    "fairface": ("FairFace（各年龄 / 肤色）", "FairFace (all ages / ethnicities)", "FairFace(전 연령/인종)"),
+    "openfake_real": ("LAION / Pexels 真照片", "LAION / Pexels reals", "LAION / Pexels 실제"),
+    "reddit_real": ("Reddit 摄影版", "Reddit photography", "Reddit 사진 게시판"),
+    "dff_text2img": ("SD 1.5 文生图（DFF）", "SD 1.5 text2img (DFF)", "SD 1.5 텍스트→이미지(DFF)"),
+    "dff_inpainting": ("SD 局部重绘（DFF）", "SD inpainting (DFF)", "SD 인페인팅(DFF)"),
+    "dff_insight": ("InsightFace 换脸（DFF）", "InsightFace swap (DFF)", "InsightFace 얼굴 교체(DFF)"),
+    "openai": ("OpenAI gpt-image 人脸", "OpenAI gpt-image faces", "OpenAI gpt-image 얼굴"),
+    "stylegan": ("StyleGAN", "StyleGAN", "StyleGAN"),
+    "ai_video_frames": ("AI 视频截图（Veo / Sora / Kling / 数字人）", "AI-video frames (Veo / Sora / Kling / talking heads)", "AI 영상 프레임(Veo/Sora/Kling/디지털 휴먼)"),
+    "swap_frames": ("换脸视频截图", "face-swap video frames", "얼굴 교체 영상 프레임"),
+    "sfhq": ("SFHQ（FLUX / SDXL / DALL-E 3）", "SFHQ (FLUX / SDXL / DALL-E 3)", "SFHQ(FLUX/SDXL/DALL-E 3)"),
+    "reddit_ai": ("Reddit AI 图（MJ / Flux / SD）", "Reddit AI art (MJ / Flux / SD)", "Reddit AI 이미지(MJ/Flux/SD)"),
+    "openfake": ("OpenFake（gpt-image / Nano Banana / Imagen 4 / MJ 7 …）", "OpenFake (gpt-image / Nano Banana / Imagen 4 / MJ 7 …)", "OpenFake(gpt-image/Nano Banana/Imagen 4/MJ 7 …)"),
+    "rapidata_unseen": ("最新生成器（Seedream 3 / Qwen / Imagen 4 / Recraft …）", "newest generators (Seedream 3 / Qwen / Imagen 4 / Recraft …)", "최신 생성기(Seedream 3/Qwen/Imagen 4/Recraft …)"),
+}
+MODEL_NAMES = [  # key, column label, sets it was trained on (None = all except rapidata)
+    ("t2i", "t2i", {"dff_text2img"}), ("inpaint", "inpaint", {"dff_inpainting"}), ("insight", "insight", {"dff_insight"}),
+    ("all", "all", {"dff_text2img", "dff_inpainting", "dff_insight"}),
+    ("all_image", "all_image", {"dff_text2img", "dff_inpainting", "dff_insight", "openai", "stylegan"}),
+    ("all_shot", "all_shot", {"dff_text2img", "dff_inpainting", "dff_insight", "openai", "stylegan", "ai_video_frames", "swap_frames"}),
+    ("fm_ft_dinov2_b", "DINOv2-ft", None), ("fm_ft_clip_l14", "CLIP-ft", None), ("fm_ens", {"zh": "**线上组合**", "en": "**live combination**", "ko": "**현재 서비스 조합**"}, None),
+    ("ext_univfd", "UnivFD", set()), ("ext_npr", "NPR", set()), ("ext_bfree", "B-Free", set()),
+]
+
+
+def arms_race_table(lang="zh"):
+    f = ROOT / "results" / "arms_race.json"
+    if not f.exists():
+        return ""
+    d = json.loads(f.read_text())
+    w, idx = ARMS[lang], {"zh": 0, "en": 1, "ko": 2}[lang]
+    unseen_word = TXT[lang]["tr_unseen"].strip()
+    cols = [(k, label[lang] if isinstance(label, dict) else label, seen) for k, label, seen in MODEL_NAMES if k in d["models"]]
+    out = [f"\n\n{w['title']}\n", f"| {w['set']} | " + " | ".join(label for _, label, _ in cols) + " |",
+           "|---" * (1 + len(cols)) + "|"]
+    for group, sets in ((w["real"], d["real_sets"]), (w["fake"], d["fake_sets"])):
+        out.append(f"| **{group}** |" + " |" * len(cols))
+        for s in sets:
+            vals = [d["models"][k].get(s) for k, _, _ in cols]
+            best = max(v for v in vals if v is not None)
+            cells = []
+            for (k, _, seen), v in zip(cols, vals):
+                cell = f"**{v:.0%}**" if v == best else f"{v:.0%}"
+                if s in d["fake_sets"] and seen is not None and s not in seen and not k.startswith("ext_"):
+                    cell += f" <sub>{unseen_word}</sub>"
+                cells.append(cell)
+            name = SET_NAMES[s][idx] + (w["unseen"] if s == "rapidata_unseen" else "")
+            out.append(f"| {name} | " + " | ".join(cells) + " |")
+    out.append("\n" + w["note"].format(cap=150))
+    return "\n".join(out)
 
 
 THEME = gr.themes.Base(
@@ -442,12 +1054,29 @@ button[role="tab"][aria-selected="true"]::after, .tab-wrapper button.selected::a
 .report.fake .status { color: var(--alarm); } .report.fake .status::before { background: var(--alarm); }
 .report.real .status { color: var(--clear); } .report.real .status::before { background: var(--clear); }
 .report .detail { margin: 12px 0 0; color: var(--ink); font-size: 1rem; }
+.report .airate { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 4px 0 10px;
+                  color: var(--ink); }
+.report .airate.r0 { color: #1E7F4F; } .report .airate.r1 { color: #5E8A1F; } .report .airate.r2 { color: #B07A00; }
+.report .airate.r3 { color: #D2561E; } .report .airate.r4 { color: #C8372D; }
+.report .airate b { font-size: clamp(2.8rem, 6vw, 3.8rem); font-weight: 800; line-height: 1;
+                    font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.report .airate-label { font-size: 1.15rem; font-weight: 700; }
+.report .airate b, .report .airate-label { color: inherit !important; }  /* Gradio prose colours <b> */
+.report .airate small { flex-basis: 100%; color: var(--graphite); font-size: .8rem; }
 .report .detail code { background: var(--shade); padding: 1px 6px; border-radius: 3px; font-size: .85em; }
-.report .evidence { min-width: 0; }
+.report .evidence { min-width: 0; overflow-x: auto; }
 .report .note { grid-column: 1 / -1; margin: 14px 0 0; color: var(--graphite); font-size: .86rem; }
-.report.empty, .report.error { display: block; border-top: 1px solid var(--rule); color: var(--graphite); }
+.report.empty.single, .report.error { display: block; border-top: 1px solid var(--rule); color: var(--graphite); }
 .report.empty .note { margin: 0; font-size: 1rem; }
 .report.error .verdict { font-size: 1.3rem; }
+.report.loading .verdict { font-size: 1.3rem; }
+.report.loading .verdict::after { content: "…"; }
+.meter.progress { display: block; height: 4px; background: var(--rule); }
+.meter.progress i { background: var(--ink); transition: width .25s ease-out; }
+.report tr[data-new] { animation: row-in .35s ease-out; }
+.report tr[data-new] .meter i { transform-origin: left; animation: bar-in .5s ease-out; }
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes bar-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .meter { position: relative; height: 10px; background: #E9ECEF; margin: 14px 0 2px; max-width: 460px; }
 .meter i { position: absolute; inset: 0 auto 0 0; background: var(--clear); }
 .meter.fake i { background: var(--alarm); }
@@ -472,7 +1101,7 @@ button[role="tab"][aria-selected="true"]::after, .tab-wrapper button.selected::a
   #masthead { flex-direction: column; align-items: flex-start; }
   #lang .wrap { margin-left: 0; }
   .report { grid-template-columns: 1fr; }
-  .report table.dets .num { display: none; }
+  .report table.dets .num { display: table-cell; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 """
@@ -503,13 +1132,14 @@ with gr.Blocks(title="AI Face Detector", delete_cache=(3600, 3600)) as demo:
             go = gr.Button(TXT["zh"]["detect"], variant="primary", size="lg")
         umd = gr.HTML(report("empty", "", "", t=TXT["zh"], note=TXT["zh"]["empty"]))
         ulbl = gr.Label(label=TXT["zh"]["prob"], visible=False)
-        ucam = gr.Image(label=TXT["zh"]["cam"], height=340, visible=False, elem_classes=["heat"])
+        ucam = gr.Gallery(label=CAM_TEXT["zh"]["title"], columns=3, height=650,
+                           object_fit="contain", visible=False, elem_id="model-heatmaps")
         ugal = gr.Gallery(label=TXT["zh"]["gallery"], columns=6, rows=2, height=360, object_fit="cover",
                           visible=False, elem_id="frames")
-        go.click(analyze_any_ui, [up, lang], [ulbl, ucam, umd, ugal], api_name="analyze_any",
-                 concurrency_id="detector", concurrency_limit=1)
-        up.upload(analyze_any_ui, [up, lang], [ulbl, ucam, umd, ugal], api_name="analyze_any_upload",
-                  concurrency_id="detector", concurrency_limit=1)
+        go.click(analyze_any_stream, [up, lang], [ulbl, ucam, umd, ugal], api_name="analyze_any",
+                 concurrency_id="detector", concurrency_limit=1, show_progress="hidden")
+        up.upload(analyze_any_stream, [up, lang], [ulbl, ucam, umd, ugal], api_name="analyze_any_upload",
+                  concurrency_id="detector", concurrency_limit=1, show_progress="hidden")
     with gr.Tab(TXT["zh"]["tab_pick"]) as tab_pick:
         with gr.Row(equal_height=True):
             inp = gr.Image(type="pil", label=TXT["zh"]["img_in"], height=300, scale=3)
@@ -532,7 +1162,7 @@ with gr.Blocks(title="AI Face Detector", delete_cache=(3600, 3600)) as demo:
         # Old results are cleared so they do not stay in the previous language.
         return (gr.update(value=brand(code)), gr.update(label=t["tab_auto"]), gr.update(label=t["tab_pick"]),
                 gr.update(label=t["tab_arms"]), gr.update(label=t["upload"]), gr.update(value=t["detect"]),
-                gr.update(label=t["prob"], value=None), gr.update(label=t["cam"], value=None, visible=False),
+                gr.update(label=t["prob"], value=None), gr.update(label=CAM_TEXT[code]["title"], value=None, visible=False),
                 gr.update(label=t["gallery"], value=None, visible=False), gr.update(label=t["img_in"]),
                 gr.update(label=t["model"]), gr.update(value=t["detect"]),
                 gr.update(label=t["prob"], value=None), gr.update(label=t["cam_pick"], value=None, visible=False),
@@ -544,6 +1174,7 @@ with gr.Blocks(title="AI Face Detector", delete_cache=(3600, 3600)) as demo:
                 js="(v) => { document.body.dataset.lang = v; return v; }")
 
     def refresh():
+        start_preload()
         names = run_names()
         value = image_model()
         return gr.update(choices=names, value=value), results_table("zh")
@@ -551,4 +1182,8 @@ with gr.Blocks(title="AI Face Detector", delete_cache=(3600, 3600)) as demo:
     demo.load(refresh, None, [run, table])
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    for noisy in ("httpx", "httpx2"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+    start_preload()
     demo.launch(**STYLE)
