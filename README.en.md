@@ -94,46 +94,63 @@ Needs [uv](https://docs.astral.sh/uv/). Uses MPS on Apple Silicon, CUDA on NVIDI
 git clone https://github.com/coobabm/dff-detector.git
 cd dff-detector
 uv sync
+# model weights (v0.3, 1.7 GB); unzip in the project root to get runs*/.../model.pt
+curl -LO https://github.com/coobabm/dff-detector/releases/download/v0.3/models-v0.3.zip
+unzip models-v0.3.zip
 uv run app.py      # http://127.0.0.1:7860
 ```
 
-The web UI reads the members from `runs/fm_ens/ensemble.json` and weights from `runs/<member>/model.pt`. This round's weights are not in a Release; train them with the steps below.
+The web UI reads the members from `runs/fm_ens/ensemble.json` and weights from `runs/<member>/model.pt`. `models-v0.3.zip` holds this round's ensemble (`runs/fm_ens/`, `runs/fm_ft_clip_l14_lora/`, `runs/fm_ft_dinov2_b/`) and the video detectors (`runs_aivid/v4/` AI-generated video, `runs_swap/b4/` face swap). The weights were trained on data with non-commercial licences (OpenFake, FFHQ ...), so use them for non-commercial research only. UnivFD / NPR / B-Free are not included; the web UI runs without them.
+
+## Repository layout
+
+| Folder | Contents |
+|---|---|
+| `app.py` | Web UI (one-click detection, single image per model, cross-generator table) |
+| `detector/` | Inference: face crops (`video_scan.py`, `extract_tight.py`), video scanning (`scan_swap.py`), published-detector wrappers (`external_detectors.py`) |
+| `data_prep/` | Download and generate data: `fetch_*.py`, `gen_*.py`, `prepare.py`, `recompress_videos.py` |
+| `training/` | Training: `fm_detector.py` (this round's CLIP / DINOv2), `train.py`, `train_swap.py`, ... |
+| `evaluation/` | Evaluation: `fm_compare.py`, `calibrate.py`, `arms_race.py`, `make_figures.py`, ... |
+| `data_lists/` | Data lists (file names / shards), no images |
+| `tests/` | Unit tests: `uv run python -m unittest discover -s tests` |
+
+Run every script from the project root, e.g. `uv run training/fm_detector.py ...`.
 
 ## Reproduce this round
 
-Data from earlier rounds (DFF, OpenAI images, modern reals, StyleGAN, video frames) is prepared with `prepare.py`, `gen_openai.py`, `fetch_real.py`, `fetch_gan.py`, `extract_tight.py`; see the commit history. New this round:
+Data from earlier rounds (DFF, OpenAI images, modern reals, StyleGAN, video frames) is prepared with `data_prep/prepare.py`, `data_prep/gen_openai.py`, `data_prep/fetch_real.py`, `data_prep/fetch_gan.py`, `detector/extract_tight.py`; see the commit history. New this round:
 
 ```bash
 # New generators / reals (Hugging Face)
-uv run fetch_hf.py sfhq
-uv run fetch_hf.py openfake
-uv run fetch_hf.py openfake lists/openfake_shards2.txt openfake2   # the 9 shards added this round
-uv run fetch_hf.py fairface
-uv run fetch_hf.py rapidata                                        # test only
-uv run fetch_hf.py manifest
+uv run data_prep/fetch_hf.py sfhq
+uv run data_prep/fetch_hf.py openfake
+uv run data_prep/fetch_hf.py openfake data_lists/openfake_shards2.txt openfake2   # the 9 shards added this round
+uv run data_prep/fetch_hf.py fairface
+uv run data_prep/fetch_hf.py rapidata                                        # test only
+uv run data_prep/fetch_hf.py manifest
 
 # Reddit (needs rdt-cli and rdt login)
-uv run fetch_reddit.py list && uv run fetch_reddit.py list_real
-uv run fetch_reddit.py download && uv run fetch_reddit.py faces
+uv run data_prep/fetch_reddit.py list && uv run data_prep/fetch_reddit.py list_real
+uv run data_prep/fetch_reddit.py download && uv run data_prep/fetch_reddit.py faces
 
 # Content-matched fakes: round 1, then round 2 (new VAEs + more inpainting)
-uv run gen_aligned.py
-uv run gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only vae_flux2 vae_qwen vae_sd15 vae_sdxl vae_flux
-uv run gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only inpaint
+uv run data_prep/gen_aligned.py
+uv run data_prep/gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only vae_flux2 vae_qwen vae_sd15 vae_sdxl vae_flux
+uv run data_prep/gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only inpaint
 
 # Optional: camera-original faces from your own library (macOS Photos)
 uvx osxphotos query --json --not-edited --only-photos > /tmp/myphotos_query.json
-uv run fetch_myphotos.py /tmp/myphotos_query.json
+uv run data_prep/fetch_myphotos.py /tmp/myphotos_query.json
 
 # Training
-FM_LORA=16 FM_REAL_WEIGHT=2.5 FM_TAG=_lora uv run fm_detector.py finetune clip_l14 5
-uv run fm_detector.py finetune dinov2_b 4   # the live model is from the previous round; retraining on today's data gives slightly different numbers
+FM_LORA=16 FM_REAL_WEIGHT=2.5 FM_TAG=_lora uv run training/fm_detector.py finetune clip_l14 5
+uv run training/fm_detector.py finetune dinov2_b 4   # the live model is from the previous round; retraining on today's data gives slightly different numbers
 
 # Evaluate, pick the ensemble, calibrate
-uv run fm_compare.py fm_ft_clip_l14_lora fm_ft_dinov2_b
-uv run calibrate.py
-uv run arms_race.py
-uv run make_figures.py   # figures on this page
+uv run evaluation/fm_compare.py fm_ft_clip_l14_lora fm_ft_dinov2_b
+uv run evaluation/calibrate.py
+uv run evaluation/arms_race.py
+uv run evaluation/make_figures.py   # figures on this page
 ```
 
 ## Limitations

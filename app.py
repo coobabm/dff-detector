@@ -25,6 +25,9 @@ from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
 from torchvision import transforms as T
 
+import sys  # noqa: E402
+sys.path[:0] = [str(Path(__file__).resolve().parent / d) for d in ("detector", "training", "data_prep", "evaluation")]
+
 from train import FAKES, MEAN, STD, build_model
 
 register_heif_opener()  # iPhone HEIC/HEIF uploads

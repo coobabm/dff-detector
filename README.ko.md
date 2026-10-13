@@ -94,46 +94,63 @@ epoch마다 실제 15,000장 + 가짜 15,000장을 계열별로 균형 있게 �
 git clone https://github.com/coobabm/dff-detector.git
 cd dff-detector
 uv sync
+# 모델 가중치(v0.3, 1.7 GB)를 프로젝트 루트에서 풀면 runs*/…/model.pt가 생깁니다
+curl -LO https://github.com/coobabm/dff-detector/releases/download/v0.3/models-v0.3.zip
+unzip models-v0.3.zip
 uv run app.py      # http://127.0.0.1:7860
 ```
 
-웹 UI는 `runs/fm_ens/ensemble.json`에서 구성원을, `runs/<구성원>/model.pt`에서 가중치를 읽습니다. 이번 라운드 가중치는 Release에 없으므로 아래 단계로 직접 학습하세요.
+웹 UI는 `runs/fm_ens/ensemble.json`에서 구성원을, `runs/<구성원>/model.pt`에서 가중치를 읽습니다. `models-v0.3.zip`에는 이번 라운드 조합 모델(`runs/fm_ens/`, `runs/fm_ft_clip_l14_lora/`, `runs/fm_ft_dinov2_b/`)과 동영상 검출기(`runs_aivid/v4/` AI 생성 동영상, `runs_swap/b4/` 얼굴 교체)가 들어 있습니다. 비상업 라이선스 데이터(OpenFake, FFHQ 등)로 학습했으므로 비상업 연구에만 쓰세요. UnivFD / NPR / B-Free는 포함되지 않으며, 없어도 웹 UI는 정상 동작합니다.
+
+## 저장소 구조
+
+| 폴더 | 내용 |
+|---|---|
+| `app.py` | 웹 UI(원클릭 검출, 모델별 단일 이미지, 생성기 교차 표) |
+| `detector/` | 추론: 얼굴 크롭(`video_scan.py`, `extract_tight.py`), 동영상 스캔(`scan_swap.py`), 공개 검출기 래퍼(`external_detectors.py`) |
+| `data_prep/` | 데이터 다운로드·생성: `fetch_*.py`, `gen_*.py`, `prepare.py`, `recompress_videos.py` |
+| `training/` | 학습: `fm_detector.py`(이번 라운드 CLIP / DINOv2), `train.py`, `train_swap.py` 등 |
+| `evaluation/` | 평가: `fm_compare.py`, `calibrate.py`, `arms_race.py`, `make_figures.py` 등 |
+| `data_lists/` | 데이터 목록(파일 이름 / 샤드), 이미지 없음 |
+| `tests/` | 단위 테스트: `uv run python -m unittest discover -s tests` |
+
+모든 스크립트는 프로젝트 루트에서 실행합니다. 예: `uv run training/fm_detector.py …`.
 
 ## 이번 라운드 재현
 
-이전 라운드 데이터(DFF, OpenAI 생성 이미지, 현대 실제 사진, StyleGAN, 동영상 프레임)는 `prepare.py`, `gen_openai.py`, `fetch_real.py`, `fetch_gan.py`, `extract_tight.py`로 준비합니다(커밋 기록 참고). 이번 라운드 추가분:
+이전 라운드 데이터(DFF, OpenAI 생성 이미지, 현대 실제 사진, StyleGAN, 동영상 프레임)는 `data_prep/prepare.py`, `data_prep/gen_openai.py`, `data_prep/fetch_real.py`, `data_prep/fetch_gan.py`, `detector/extract_tight.py`로 준비합니다(커밋 기록 참고). 이번 라운드 추가분:
 
 ```bash
 # 새 생성기 / 실제 사진 (Hugging Face)
-uv run fetch_hf.py sfhq
-uv run fetch_hf.py openfake
-uv run fetch_hf.py openfake lists/openfake_shards2.txt openfake2   # 이번 라운드에 추가한 샤드 9개
-uv run fetch_hf.py fairface
-uv run fetch_hf.py rapidata                                        # 테스트 전용
-uv run fetch_hf.py manifest
+uv run data_prep/fetch_hf.py sfhq
+uv run data_prep/fetch_hf.py openfake
+uv run data_prep/fetch_hf.py openfake data_lists/openfake_shards2.txt openfake2   # 이번 라운드에 추가한 샤드 9개
+uv run data_prep/fetch_hf.py fairface
+uv run data_prep/fetch_hf.py rapidata                                        # 테스트 전용
+uv run data_prep/fetch_hf.py manifest
 
 # Reddit (rdt-cli와 rdt login 필요)
-uv run fetch_reddit.py list && uv run fetch_reddit.py list_real
-uv run fetch_reddit.py download && uv run fetch_reddit.py faces
+uv run data_prep/fetch_reddit.py list && uv run data_prep/fetch_reddit.py list_real
+uv run data_prep/fetch_reddit.py download && uv run data_prep/fetch_reddit.py faces
 
 # 같은 내용 가짜: 1라운드, 이어서 2라운드 (새 VAE + 인페인팅 추가)
-uv run gen_aligned.py
-uv run gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only vae_flux2 vae_qwen vae_sd15 vae_sdxl vae_flux
-uv run gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only inpaint
+uv run data_prep/gen_aligned.py
+uv run data_prep/gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only vae_flux2 vae_qwen vae_sd15 vae_sdxl vae_flux
+uv run data_prep/gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only inpaint
 
 # 선택: 본인 앨범의 카메라 원본 얼굴 (macOS 사진 앱)
 uvx osxphotos query --json --not-edited --only-photos > /tmp/myphotos_query.json
-uv run fetch_myphotos.py /tmp/myphotos_query.json
+uv run data_prep/fetch_myphotos.py /tmp/myphotos_query.json
 
 # 학습
-FM_LORA=16 FM_REAL_WEIGHT=2.5 FM_TAG=_lora uv run fm_detector.py finetune clip_l14 5
-uv run fm_detector.py finetune dinov2_b 4   # 서비스 중인 모델은 이전 라운드 것이며, 현재 데이터로 다시 학습하면 수치가 조금 다릅니다
+FM_LORA=16 FM_REAL_WEIGHT=2.5 FM_TAG=_lora uv run training/fm_detector.py finetune clip_l14 5
+uv run training/fm_detector.py finetune dinov2_b 4   # 서비스 중인 모델은 이전 라운드 것이며, 현재 데이터로 다시 학습하면 수치가 조금 다릅니다
 
 # 평가, 조합 선택, 보정
-uv run fm_compare.py fm_ft_clip_l14_lora fm_ft_dinov2_b
-uv run calibrate.py
-uv run arms_race.py
-uv run make_figures.py   # 이 문서의 그림
+uv run evaluation/fm_compare.py fm_ft_clip_l14_lora fm_ft_dinov2_b
+uv run evaluation/calibrate.py
+uv run evaluation/arms_race.py
+uv run evaluation/make_figures.py   # 이 문서의 그림
 ```
 
 ## 한계

@@ -94,46 +94,63 @@
 git clone https://github.com/coobabm/dff-detector.git
 cd dff-detector
 uv sync
+# 下载模型权重（v0.3，1.7 GB），在项目根目录解压，得到 runs*/…/model.pt
+curl -LO https://github.com/coobabm/dff-detector/releases/download/v0.3/models-v0.3.zip
+unzip models-v0.3.zip
 uv run app.py      # http://127.0.0.1:7860
 ```
 
-Web UI 从 `runs/fm_ens/ensemble.json` 读组合成员，权重放在 `runs/<成员名>/model.pt`。本轮权重没有放进 Release，需要按下面的步骤自己训练。
+Web UI 从 `runs/fm_ens/ensemble.json` 读组合成员，权重放在 `runs/<成员名>/model.pt`。`models-v0.3.zip` 包含本轮的组合模型（`runs/fm_ens/`、`runs/fm_ft_clip_l14_lora/`、`runs/fm_ft_dinov2_b/`）和视频检测器（`runs_aivid/v4/` AI 生成视频、`runs_swap/b4/` 换脸）。权重由含非商用许可的数据训练（OpenFake、FFHQ 等），只能用于非商业研究。UnivFD / NPR / B-Free 不在包里，没有它们 Web UI 照常运行。
+
+## 目录结构
+
+| 目录 | 内容 |
+|---|---|
+| `app.py` | Web UI（一键检测、单图选模型、跨生成器表） |
+| `detector/` | 推理用：人脸裁切（`video_scan.py`、`extract_tight.py`）、视频扫描（`scan_swap.py`）、公开检测器封装（`external_detectors.py`） |
+| `data_prep/` | 下载和生成数据：`fetch_*.py`、`gen_*.py`、`prepare.py`、`recompress_videos.py` |
+| `training/` | 训练：`fm_detector.py`（本轮 CLIP / DINOv2）、`train.py`、`train_swap.py` 等 |
+| `evaluation/` | 评估：`fm_compare.py`、`calibrate.py`、`arms_race.py`、`make_figures.py` 等 |
+| `data_lists/` | 数据清单（文件名 / 分片），不含图片 |
+| `tests/` | 单元测试：`uv run python -m unittest discover -s tests` |
+
+所有脚本在项目根目录运行，例如 `uv run training/fm_detector.py …`。
 
 ## 复现本轮训练
 
-前几轮的数据（DFF、OpenAI 生成图、现代真图、StyleGAN、视频截图）用 `prepare.py`、`gen_openai.py`、`fetch_real.py`、`fetch_gan.py`、`extract_tight.py` 准备，见本仓库的提交历史。本轮新增：
+前几轮的数据（DFF、OpenAI 生成图、现代真图、StyleGAN、视频截图）用 `data_prep/prepare.py`、`data_prep/gen_openai.py`、`data_prep/fetch_real.py`、`data_prep/fetch_gan.py`、`detector/extract_tight.py` 准备，见本仓库的提交历史。本轮新增：
 
 ```bash
 # 新生成器 / 真图（Hugging Face）
-uv run fetch_hf.py sfhq
-uv run fetch_hf.py openfake
-uv run fetch_hf.py openfake lists/openfake_shards2.txt openfake2   # 本轮新增的 9 个分片
-uv run fetch_hf.py fairface
-uv run fetch_hf.py rapidata                                        # 只做测试
-uv run fetch_hf.py manifest
+uv run data_prep/fetch_hf.py sfhq
+uv run data_prep/fetch_hf.py openfake
+uv run data_prep/fetch_hf.py openfake data_lists/openfake_shards2.txt openfake2   # 本轮新增的 9 个分片
+uv run data_prep/fetch_hf.py fairface
+uv run data_prep/fetch_hf.py rapidata                                        # 只做测试
+uv run data_prep/fetch_hf.py manifest
 
 # Reddit（需要 rdt-cli 并 rdt login）
-uv run fetch_reddit.py list && uv run fetch_reddit.py list_real
-uv run fetch_reddit.py download && uv run fetch_reddit.py faces
+uv run data_prep/fetch_reddit.py list && uv run data_prep/fetch_reddit.py list_real
+uv run data_prep/fetch_reddit.py download && uv run data_prep/fetch_reddit.py faces
 
 # 同内容假图：第 1 轮，再加第 2 轮（新 VAE + 更多局部重绘）
-uv run gen_aligned.py
-uv run gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only vae_flux2 vae_qwen vae_sd15 vae_sdxl vae_flux
-uv run gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only inpaint
+uv run data_prep/gen_aligned.py
+uv run data_prep/gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only vae_flux2 vae_qwen vae_sd15 vae_sdxl vae_flux
+uv run data_prep/gen_aligned.py --round 2 --train 6000 --test 1000 --max-inpaint 1200 --only inpaint
 
 # 可选：自己相册里的相机直出人脸（macOS Photos）
 uvx osxphotos query --json --not-edited --only-photos > /tmp/myphotos_query.json
-uv run fetch_myphotos.py /tmp/myphotos_query.json
+uv run data_prep/fetch_myphotos.py /tmp/myphotos_query.json
 
 # 训练
-FM_LORA=16 FM_REAL_WEIGHT=2.5 FM_TAG=_lora uv run fm_detector.py finetune clip_l14 5
-uv run fm_detector.py finetune dinov2_b 4   # 线上用的是上一轮训练的版本，用现在的数据重训数字会略有不同
+FM_LORA=16 FM_REAL_WEIGHT=2.5 FM_TAG=_lora uv run training/fm_detector.py finetune clip_l14 5
+uv run training/fm_detector.py finetune dinov2_b 4   # 线上用的是上一轮训练的版本，用现在的数据重训数字会略有不同
 
 # 评估、挑组合、校准
-uv run fm_compare.py fm_ft_clip_l14_lora fm_ft_dinov2_b
-uv run calibrate.py
-uv run arms_race.py
-uv run make_figures.py   # 本页配图
+uv run evaluation/fm_compare.py fm_ft_clip_l14_lora fm_ft_dinov2_b
+uv run evaluation/calibrate.py
+uv run evaluation/arms_race.py
+uv run evaluation/make_figures.py   # 本页配图
 ```
 
 ## 局限
