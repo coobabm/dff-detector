@@ -6,6 +6,10 @@
 
 附带 Gradio Web UI（中文 / English / 한국어）：上传图片，给出判定、校准后的“AI 率”和 Grad-CAM 热力图；上传视频，交给单独的视频检测器。
 
+<img src="docs/round_ui.jpg" width="640" alt="Web UI">
+
+*Web UI：上传一张 OpenAI 生成的人脸（本项目生成），组合模型判为 AI，AI 率 >99%，下方是两个成员模型的 Grad-CAM。*
+
 ## 最终模型
 
 两个模型的 P(fake) 取平均，阈值 **0.522**：
@@ -26,6 +30,9 @@
 5. **相机直出真图**：从作者自己的相册里挑了未经编辑、EXIF 里没有修图软件、有相机型号的带脸照片，作为真图训练（只在本地使用，不公开）。
 6. **测试时增强**：试了水平翻转取平均，对这一对模型没有提升，没有启用（`ensemble.json` 里加 `"tta": true` 可以打开）。
 
+![content-matched fakes](docs/round_aligned.jpg)
+*同内容假图：上排真图，中排假图，下排是两者差异放大 8 倍。VAE 往返只留下很淡的痕迹，局部重绘只改一块区域。*
+
 每轮从每类数据里均衡抽样 15,000 张真图 + 15,000 张假图（类内每个来源份额相同），统一裁成 256 px 宽松人脸、JPEG q95。训练增强：随机缩放模糊、高斯模糊、JPEG 50–95、电影感调色、随机裁剪、水平翻转、轻微颜色抖动，真假两类做同样的增强。
 
 ### 训练数据
@@ -43,7 +50,11 @@
 | | | 同内容 SD2 局部重绘 | 1,190 |
 | | | OpenAI gpt-image | 897 |
 
+![training loss](docs/round_loss.png)
+
 ## 结果
+
+![results](docs/round_results.png)
 
 留出测试集（训练时没见过的人物 / 帖子 / 视频；Rapidata 一张都没训练过）：
 
@@ -61,11 +72,17 @@
 | | | 同内容局部重绘 | 59.0% |
 | | | 同内容 VAE 往返 | 41.6% |
 
+![samples](docs/round_samples.jpg)
+*从留出测试集随机抽取（不是挑出来的），数字是组合分数，红色 = 超过阈值。第一行的生成器训练时一张都没见过；第二行的 Midjourney 6 这张漏检了。*
+
 - 真人集平均判对 97.7%，假图平均检出 82.1%。
 - 单独看 CLIP LoRA 模型，假图平均检出 88.0%，但真人集平均判对只有 96.9%（真视频截图 93.4%）。和 DINOv2 平均后，真图误报回到原来的水平。
 - 同内容 VAE 假图最难：和原图内容一模一样，只差自编码器留下的细微痕迹。
 
 **AI 率**：组合分数用保序回归在留出数据上校准（假设送检图片真假各半，每个测试集等权），留出一半上的校准误差 ECE 3.0% → 0.5%。分数 0.3 ≈ AI 率 24%，0.5 ≈ 64%，0.9 ≈ 99%。判定仍然按阈值。
+
+![calibration](docs/round_calibration.png)
+*左：真图和 AI 图在留出集上的分数分布（对数纵轴）；右：分数到 AI 率的校准曲线。*
 
 完整数字：`results/fm_combo.json`（组合挑选）、`results/arms_race.json`（全部模型 × 全部测试集）。
 
@@ -116,6 +133,7 @@ uv run fm_detector.py finetune dinov2_b 4   # 线上用的是上一轮训练的�
 uv run fm_compare.py fm_ft_clip_l14_lora fm_ft_dinov2_b
 uv run calibrate.py
 uv run arms_race.py
+uv run make_figures.py   # 本页配图
 ```
 
 ## 局限
@@ -129,6 +147,7 @@ uv run arms_race.py
 
 - 代码：MIT（见 [LICENSE](LICENSE)）。
 - 第三方数据集只在本地使用，本仓库**不分发**：FairFace（CC BY 4.0）、SFHQ-T2I（MIT）、OpenFake（CC BY-NC 4.0）、Rapidata（CDLA-Permissive-2.0）、DFF（OpenRAIL）、FFHQ（CC BY-NC-SA 4.0）、Reddit 帖子（遵循 Reddit 条款）等。
+- `docs/round_*` 配图里的样例图来自 Rapidata（CDLA-Permissive-2.0）、SFHQ-T2I（MIT）、OpenFake（CC BY-NC 4.0）、FairFace（CC BY 4.0）、Pexels（Pexels License）和本项目自己生成的 OpenAI 图，仅作说明用途。
 - 对比用的公开检测器（UnivFD、NPR、B-Free）不在仓库里，请从各自项目获取并遵循其许可。
 
 本项目仅供研究与教学，检测结果不能作为鉴定依据。

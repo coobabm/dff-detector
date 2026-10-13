@@ -6,6 +6,10 @@
 
 Gradio 웹 UI(中文 / English / 한국어)를 포함합니다. 이미지를 올리면 판정, 보정된 "AI 확률", Grad-CAM 히트맵을 보여 주고, 동영상은 별도의 동영상 검출기로 보냅니다.
 
+<img src="docs/round_ui.jpg" width="640" alt="Web UI">
+
+*웹 UI: OpenAI로 생성한 얼굴(이 프로젝트에서 생성)을 AI로 판정, AI 확률 >99%. 아래는 두 구성원 모델의 Grad-CAM.*
+
 ## 최종 모델
 
 두 모델의 P(fake) 평균, 임계값 **0.522**:
@@ -26,6 +30,9 @@ Gradio 웹 UI(中文 / English / 한국어)를 포함합니다. 이미지를 올
 5. **카메라 원본 실제 사진**: 작성자 본인 앨범에서 편집하지 않았고 EXIF에 편집 소프트웨어가 없으며 카메라 모델이 있는 얼굴 사진을 실제 이미지로 학습했습니다(로컬에서만 사용, 공개하지 않음).
 6. **테스트 시 증강**: 좌우 반전 평균을 시험했지만 이 조합에서는 이득이 없어 껐습니다(`ensemble.json`에 `"tta": true`로 켤 수 있음).
 
+![content-matched fakes](docs/round_aligned.jpg)
+*같은 내용 가짜: 위는 실제, 가운데는 가짜, 아래는 차이를 8배 확대. VAE 왕복은 아주 옅은 흔적만 남기고, 인페인팅은 한 영역만 바꿉니다.*
+
 epoch마다 실제 15,000장 + 가짜 15,000장을 계열별로 균형 있게 뽑습니다(계열 안에서 출처별 같은 비율). 모두 256 px 느슨한 얼굴 크롭, JPEG q95. 증강(두 클래스 동일): 축소 후 확대, 가우시안 블러, JPEG 50–95, 영화풍 색보정, 랜덤 크롭, 좌우 반전, 약한 색 변화.
 
 ### 학습 데이터
@@ -43,7 +50,11 @@ epoch마다 실제 15,000장 + 가짜 15,000장을 계열별로 균형 있게 �
 | | | 같은 내용 SD2 인페인팅 | 1,190 |
 | | | OpenAI gpt-image | 897 |
 
+![training loss](docs/round_loss.png)
+
 ## 결과
+
+![results](docs/round_results.png)
 
 보류 테스트 세트 (학습에 쓰지 않은 인물 / 게시물 / 동영상; Rapidata는 학습에 전혀 쓰지 않음):
 
@@ -61,11 +72,17 @@ epoch마다 실제 15,000장 + 가짜 15,000장을 계열별로 균형 있게 �
 | | | 같은 내용 인페인팅 | 59.0% |
 | | | 같은 내용 VAE 왕복 | 41.6% |
 
+![samples](docs/round_samples.jpg)
+*보류 세트에서 무작위로 뽑은 이미지(골라낸 것이 아님). 숫자는 조합 점수이며 빨간색은 임계값 초과. 첫 줄은 학습에 전혀 쓰지 않은 생성기이고, 둘째 줄의 Midjourney 6 이미지는 놓쳤습니다.*
+
 - 실제 세트 평균 97.7% 정답, 가짜 세트 평균 82.1% 검출.
 - CLIP LoRA 단독은 평균 88.0%를 검출하지만 실제 세트 정답률이 96.9%(실제 동영상 프레임 93.4%)로 떨어집니다. DINOv2와 평균하면 오탐이 이전 수준으로 돌아옵니다.
 - 같은 내용 VAE 가짜가 가장 어렵습니다: 원본과 내용이 같고 오토인코더의 미세한 흔적만 남습니다.
 
 **AI 확률**: 조합 점수를 보류 데이터에서 등위 회귀로 보정합니다(진짜·AI 반반 사전확률, 테스트 세트마다 같은 가중치). 보류 절반에서 ECE 3.0% → 0.5%. 점수 0.3 ≈ 24%, 0.5 ≈ 64%, 0.9 ≈ 99%. 판정은 여전히 임계값 기준입니다.
+
+![calibration](docs/round_calibration.png)
+*왼쪽: 보류 세트에서 실제와 AI 이미지의 점수 분포(로그 축). 오른쪽: 점수에서 AI 확률로 가는 보정 곡선.*
 
 전체 수치: `results/fm_combo.json`(조합 선택), `results/arms_race.json`(모든 모델 × 모든 테스트 세트).
 
@@ -116,6 +133,7 @@ uv run fm_detector.py finetune dinov2_b 4   # 서비스 중인 모델은 이전 
 uv run fm_compare.py fm_ft_clip_l14_lora fm_ft_dinov2_b
 uv run calibrate.py
 uv run arms_race.py
+uv run make_figures.py   # 이 문서의 그림
 ```
 
 ## 한계
@@ -129,6 +147,7 @@ uv run arms_race.py
 
 - 코드: MIT ([LICENSE](LICENSE) 참고).
 - 제3자 데이터셋은 로컬에서만 사용하며 이 저장소에서 **재배포하지 않습니다**: FairFace(CC BY 4.0), SFHQ-T2I(MIT), OpenFake(CC BY-NC 4.0), Rapidata(CDLA-Permissive-2.0), DFF(OpenRAIL), FFHQ(CC BY-NC-SA 4.0), Reddit 게시물(Reddit 약관) 등.
+- `docs/round_*` 그림의 예시 이미지는 Rapidata(CDLA-Permissive-2.0), SFHQ-T2I(MIT), OpenFake(CC BY-NC 4.0), FairFace(CC BY 4.0), Pexels(Pexels License)와 이 프로젝트에서 생성한 OpenAI 이미지이며, 설명용으로만 씁니다.
 - 비교에 쓴 공개 검출기(UnivFD, NPR, B-Free)는 이 저장소에 없습니다. 각 프로젝트에서 받아 해당 라이선스를 따르세요.
 
 연구·교육용입니다. 검출 결과는 감정 근거가 될 수 없습니다.
